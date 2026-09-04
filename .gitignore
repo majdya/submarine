@@ -1,0 +1,14 @@
+# Unrelated coursework (not part of the final project)
+/c/
+/cpp/
+/embd/
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+*.swp
+
+# The STM32 project has its own .gitignore for build/ etc.
+
+# Office lock files
+~$*
