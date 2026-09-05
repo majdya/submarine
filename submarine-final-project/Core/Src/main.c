@@ -137,10 +137,11 @@ void StartInitTask(void *argument);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-/* IWDG is enabled now (see MX_IWDG_Init() call in main()), but this guard
-   stays: it's what made every HAL_IWDG_Refresh() call site safe to write
-   defensively back when IWDG was still disabled, and keeping it costs
-   nothing if IWDG is ever disabled again for debugging. */
+/* MX_IWDG_Init() is commented out again below - re-enabling it caused a
+   real boot loop on hardware (see the comment at the call site). Several
+   call sites still (correctly) try to refresh it defensively before it
+   may exist - this guards every one of them against calling into a
+   zero-initialized hiwdg.Instance. */
 uint8_t IwdgIsInitialized(void) { return hiwdg.Instance != NULL; }
 
 static void SafeIwdgRefresh(void) {
@@ -171,15 +172,16 @@ int main(void) {
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  /* Re-enabled: SD/FatFs and the DS1307 RTC (the two blocking-call paths
-     that made IWDG risky to leave on) are now proven stable over many
-     boots - see the "how urgent is the IWDG" discussion. It cannot be
-     stopped once started, so if this ever needs to come back out, revert
-     to commenting this call rather than trying to disable it at runtime.
-     ~4s timeout (IWDG_PRESCALER_64, Reload=2000, LSI ~32kHz) against a
-     250ms Task_Watchdog refresh - ample margin as long as the scheduler
-     is alive; only real kernel-level lockups will trip it. */
-  MX_IWDG_Init();
+  /* REVERTED (again): re-enabling this caused an immediate boot loop on
+     real hardware - CSR showed IWDGRSTF every cycle, cut off partway
+     through StartInitTask's very first print, well under the expected
+     ~4s window. Root cause not yet found (heap/mutex accounting for the
+     new app_config module was checked and looks fine on paper; DBGMCU
+     not freezing IWDG during a debugger-attached flash/reset is also a
+     candidate, since ST-Link can hold the core briefly around reset).
+     Disabling again until this is actually diagnosed against real
+     hardware behavior instead of guessed at from here. */
+  /* MX_IWDG_Init(); */
   MX_USART2_UART_Init();
   MX_ADC1_Init();
   MX_ADC2_Init();
