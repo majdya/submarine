@@ -53,12 +53,26 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/app/rtc_ds1307.c
     Core/Src/app/sdcard.c
     Core/Src/app/peripheral_selftest.c
+    Core/Src/app/app_state.c
+    Core/Src/app/app_event.c
+    Core/Src/app/app_log.c
+    Core/Src/app/app_comm.c
+    Core/Src/app/app_serial.c
+    Core/Src/app/tasks/task_monitor.c
+    Core/Src/app/tasks/task_event.c
+    Core/Src/app/tasks/task_log.c
+    Core/Src/app/tasks/task_comm.c
+    Core/Src/app/tasks/task_watchdog.c
+    Middlewares/FatFs/src/ff.c
+    Middlewares/FatFs/src/diskio.c
 )
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
     Core/Inc/app
+    Core/Inc/app/tasks
+    Middlewares/FatFs/src
 )
 
 # Add project symbols (macros)

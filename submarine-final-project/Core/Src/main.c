@@ -22,8 +22,20 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "app_comm.h"
+#include "app_event.h"
+#include "app_log.h"
+#include "app_serial.h"
+#include "app_state.h"
+#include "rtc_ds1307.h"
 #include "dwt_delay.h"
+#include "indicators.h"
 #include "peripheral_selftest.h"
+#include "task_comm.h"
+#include "task_event.h"
+#include "task_log.h"
+#include "task_monitor.h"
+#include "task_watchdog.h"
 #include <stdio.h>
 #include <string.h>
 /* USER CODE END Includes */
@@ -51,18 +63,55 @@ I2C_HandleTypeDef hi2c3;
 
 IWDG_HandleTypeDef hiwdg;
 
-SPI_HandleTypeDef hspi3;
+SPI_HandleTypeDef hspi1;
 
 TIM_HandleTypeDef htim3;
 
 UART_HandleTypeDef huart2;
 
-/* Definitions for defaultTask */
-osThreadId_t defaultTaskHandle;
-const osThreadAttr_t defaultTask_attributes = {
-    .name = "defaultTask",
+/* Definitions for InitTask - one-shot boot sequence, then becomes the
+   alive-blink heartbeat for the rest of the run. */
+osThreadId_t initTaskHandle;
+const osThreadAttr_t initTask_attributes = {
+    .name = "InitTask",
     .stack_size = 512 * 4,
     .priority = (osPriority_t)osPriorityNormal,
+};
+
+osThreadId_t monitorTaskHandle;
+const osThreadAttr_t monitorTask_attributes = {
+    .name = "MonitorTask",
+    .stack_size = 512 * 4,
+    .priority = (osPriority_t)osPriorityNormal,
+};
+
+osThreadId_t eventTaskHandle;
+const osThreadAttr_t eventTask_attributes = {
+    .name = "EventTask",
+    .stack_size = 384 * 4,
+    .priority = (osPriority_t)osPriorityNormal,
+};
+
+osThreadId_t logTaskHandle;
+const osThreadAttr_t logTask_attributes = {
+    .name = "LogTask",
+    .stack_size = 768 * 4, /* FatFs (f_open/f_write/f_mkfs) needs more
+                              headroom than plain GPIO/SPI calls */
+    .priority = (osPriority_t)osPriorityBelowNormal,
+};
+
+osThreadId_t commTaskHandle;
+const osThreadAttr_t commTask_attributes = {
+    .name = "CommTask",
+    .stack_size = 384 * 4,
+    .priority = (osPriority_t)osPriorityAboveNormal,
+};
+
+osThreadId_t watchdogTaskHandle;
+const osThreadAttr_t watchdogTask_attributes = {
+    .name = "WatchdogTask",
+    .stack_size = 256 * 4,
+    .priority = (osPriority_t)osPriorityHigh,
 };
 /* USER CODE BEGIN PV */
 
@@ -78,8 +127,8 @@ static void MX_ADC1_Init(void);
 static void MX_ADC2_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_I2C3_Init(void);
-static void MX_SPI3_Init(void);
-void StartDefaultTask(void *argument);
+static void MX_SPI1_Init(void);
+void StartInitTask(void *argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -87,7 +136,17 @@ void StartDefaultTask(void *argument);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+/* MX_IWDG_Init() is currently commented out below (disabled while
+   validating hardware). Several call sites still (correctly) try to
+   refresh it defensively before it may exist - this guards every one
+   of them against calling into a zero-initialized hiwdg.Instance. */
+uint8_t IwdgIsInitialized(void) { return hiwdg.Instance != NULL; }
 
+static void SafeIwdgRefresh(void) {
+  if (IwdgIsInitialized()) {
+    HAL_IWDG_Refresh(&hiwdg);
+  }
+}
 /* USER CODE END 0 */
 
 /**
@@ -119,7 +178,7 @@ int main(void) {
   MX_ADC2_Init();
   MX_TIM3_Init();
   MX_I2C3_Init();
-  MX_SPI3_Init();
+  MX_SPI1_Init();
 
   /* USER CODE BEGIN 2 */
   // 3. PRINT USING THE PRE-SAVED CLEAN_CSR VALUE
@@ -139,18 +198,18 @@ int main(void) {
                         HAL_MAX_DELAY);
     }
   }
-  HAL_IWDG_Refresh(&hiwdg);
+  SafeIwdgRefresh();
 
   /* NOTE: previously this block manually re-initialized PA5 as a plain GPIO
      output for an "alive" blink, which used to collide with SPI1_SCK on
      that same pin. Removed. LED1 (PC5) is already a clean, conflict-free
      GPIO output configured by MX_GPIO_Init() - use it for the alive
-     indicator instead (see the toggle in StartDefaultTask). SD card SPI
-     traffic has since moved off PA5/6/7/PB6 entirely (onto SPI3 /
-     PC10-12 + PD2 CS) because those Arduino-header pins (D13/D12/D11/D10)
-     are physically shared with the sensor shield's RGB LED. */
+     indicator instead (now the alive-blink in StartInitTask). SD card SPI
+     stays on SPI1/PA5-6-7 + PB6 CS - the SD/RTC shield's traces are
+     hard-wired there and can't be moved, so those pins permanently share
+     duty with the sensor shield's RGB LED (Green/Blue) and D12 LED. */
 
-  HAL_IWDG_Refresh(&hiwdg);
+  SafeIwdgRefresh();
   {
     const char *msg = "Submarine LNC boot OK - v0.1 \r\n";
     HAL_UART_Transmit(&huart2, (uint8_t *)msg, strlen(msg), HAL_MAX_DELAY);
@@ -161,7 +220,8 @@ int main(void) {
   osKernelInitialize();
 
   /* USER CODE BEGIN RTOS_MUTEX */
-  /* add mutexes, ... */
+  Serial_Init();
+  AppState_Init();
   /* USER CODE END RTOS_MUTEX */
 
   /* USER CODE BEGIN RTOS_SEMAPHORES */
@@ -173,26 +233,32 @@ int main(void) {
   /* USER CODE END RTOS_TIMERS */
 
   /* USER CODE BEGIN RTOS_QUEUES */
-  /* add queues, ... */
+  AppEvent_QueueCreate();
+  AppLog_QueueCreate();
+  AppComm_QueueCreate();
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
-  /* creation of defaultTask */
-  defaultTaskHandle =
-      osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
+  /* creation of InitTask */
+  initTaskHandle = osThreadNew(StartInitTask, NULL, &initTask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
-  /* add threads, ... */
+  monitorTaskHandle = osThreadNew(Task_Monitor, NULL, &monitorTask_attributes);
+  eventTaskHandle = osThreadNew(Task_Event, NULL, &eventTask_attributes);
+  logTaskHandle = osThreadNew(Task_Log, NULL, &logTask_attributes);
+  commTaskHandle = osThreadNew(Task_Comm, NULL, &commTask_attributes);
+  watchdogTaskHandle =
+      osThreadNew(Task_Watchdog, NULL, &watchdogTask_attributes);
   /* USER CODE END RTOS_THREADS */
 
   /* USER CODE BEGIN RTOS_EVENTS */
   /* add events, ... */
   /* USER CODE END RTOS_EVENTS */
 
-  /* Close the gap: nothing refreshes IWDG between here and StartDefaultTask's
+  /* Close the gap: nothing refreshes IWDG between here and Task_Watchdog's
      first refresh, and osKernelStart() + first context switch is not
      instant. Refresh right before handing off. */
-  HAL_IWDG_Refresh(&hiwdg);
+  SafeIwdgRefresh();
 
   /* Start scheduler */
   osKernelStart();
@@ -206,8 +272,9 @@ int main(void) {
 
     /* USER CODE BEGIN 3 */
     /* Unreachable once osKernelStart() succeeds - real application code lives
-       in StartDefaultTask(). This loop only runs if the scheduler fails to
-       start, which should never happen; kept empty on purpose. */
+       in StartInitTask() and the other app tasks. This loop only runs if the
+       scheduler fails to start, which should never happen; kept empty on
+       purpose. */
   }
   /* USER CODE END 3 */
 }
@@ -476,45 +543,48 @@ static void MX_IWDG_Init(void) {
 }
 
 /**
- * @brief SPI3 Initialization Function
+ * @brief SPI1 Initialization Function
  * @param None
  * @retval None
  *
- * Moved here from SPI1 (PA5/6/7 + PB6 CS): those pins are the Nucleo
- * Arduino header's D13/D12/D11/D10, which are physically shared with the
- * sensor shield's RGB LED. SPI3 (PC10/11/12, Morpho-only pins) plus a
- * manual CS on PD2 (also Morpho-only) has no such overlap.
- */
-static void MX_SPI3_Init(void) {
+ * Reverted back to SPI1 (PA5/6/7 + PB6 CS): the SD/RTC data-logger
+ * shield's SD slot is hard-wired on its PCB to the Arduino SPI pins
+ * (D13/D12/D11/D10 = PA5/PA6/PA7/PB6) - it cannot be moved. The other
+ * sensor shield's RGB LED sits on D9-D11 of the same header and both
+ * shields are stacked together, so D10/D11 (PB6/PA7) are physically
+ * shared between the SD card's CS/MOSI and the RGB LED's Green/Blue
+ * legs - that overlap is a real hardware limit of this stack, not
+ * something firmware can resolve. */
+static void MX_SPI1_Init(void) {
 
-  /* USER CODE BEGIN SPI3_Init 0 */
+  /* USER CODE BEGIN SPI1_Init 0 */
 
-  /* USER CODE END SPI3_Init 0 */
+  /* USER CODE END SPI1_Init 0 */
 
-  /* USER CODE BEGIN SPI3_Init 1 */
+  /* USER CODE BEGIN SPI1_Init 1 */
 
-  /* USER CODE END SPI3_Init 1 */
-  /* SPI3 parameter configuration*/
-  hspi3.Instance = SPI3;
-  hspi3.Init.Mode = SPI_MODE_MASTER;
-  hspi3.Init.Direction = SPI_DIRECTION_2LINES;
-  hspi3.Init.DataSize = SPI_DATASIZE_8BIT;
-  hspi3.Init.CLKPolarity = SPI_POLARITY_LOW;
-  hspi3.Init.CLKPhase = SPI_PHASE_1EDGE;
-  hspi3.Init.NSS = SPI_NSS_SOFT;
-  hspi3.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
-  hspi3.Init.FirstBit = SPI_FIRSTBIT_MSB;
-  hspi3.Init.TIMode = SPI_TIMODE_DISABLE;
-  hspi3.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
-  hspi3.Init.CRCPolynomial = 7;
-  hspi3.Init.CRCLength = SPI_CRC_LENGTH_DATASIZE;
-  hspi3.Init.NSSPMode = SPI_NSS_PULSE_ENABLE;
-  if (HAL_SPI_Init(&hspi3) != HAL_OK) {
+  /* USER CODE END SPI1_Init 1 */
+  /* SPI1 parameter configuration*/
+  hspi1.Instance = SPI1;
+  hspi1.Init.Mode = SPI_MODE_MASTER;
+  hspi1.Init.Direction = SPI_DIRECTION_2LINES;
+  hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
+  hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
+  hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
+  hspi1.Init.NSS = SPI_NSS_SOFT;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+  hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
+  hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
+  hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+  hspi1.Init.CRCPolynomial = 7;
+  hspi1.Init.CRCLength = SPI_CRC_LENGTH_DATASIZE;
+  hspi1.Init.NSSPMode = SPI_NSS_PULSE_ENABLE;
+  if (HAL_SPI_Init(&hspi1) != HAL_OK) {
     Error_Handler();
   }
-  /* USER CODE BEGIN SPI3_Init 2 */
+  /* USER CODE BEGIN SPI1_Init 2 */
 
-  /* USER CODE END SPI3_Init 2 */
+  /* USER CODE END SPI1_Init 2 */
 }
 
 /**
@@ -617,16 +687,13 @@ static void MX_GPIO_Init(void) {
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
-  __HAL_RCC_GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, LED2_Pin, GPIO_PIN_SET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(SD_CS_GPIO_Port, SD_CS_Pin, GPIO_PIN_SET); /* SD SPI3 CS, idle deselected */
+  HAL_GPIO_WritePin(GPIOB, LED2_Pin | SD_CS_Pin,
+                    GPIO_PIN_SET); /* SD_CS_Pin (PB6) idle deselected */
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET);
@@ -638,19 +705,12 @@ static void MX_GPIO_Init(void) {
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LED1_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : LED2_Pin */
-  GPIO_InitStruct.Pin = LED2_Pin;
+  /*Configure GPIO pins : LED2_Pin SD_CS_Pin (PB6, SPI1 manual CS) */
+  GPIO_InitStruct.Pin = LED2_Pin | SD_CS_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : SD_CS_Pin (SPI3 manual CS) */
-  GPIO_InitStruct.Pin = SD_CS_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(SD_CS_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : SILENCE_Pin */
   GPIO_InitStruct.Pin = SILENCE_Pin;
@@ -675,7 +735,15 @@ static void MX_GPIO_Init(void) {
   HAL_NVIC_SetPriority(EXTI3_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(EXTI3_IRQn);
 
-  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
+  /* Priority 0 here (the original CubeMX default) is ABOVE
+     configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY (5, see FreeRTOSConfig.h)
+     - an ISR that urgent is not allowed to call any FreeRTOS API
+     (osMessageQueuePut, called from HAL_GPIO_EXTI_Callback via
+     AppEvent_Post). Doing so corrupts the kernel rather than faulting
+     cleanly, which is exactly what 'presses this button, firmware
+     hangs, only a hardware reset recovers it' looks like. EXTI3
+     (Object Detect) was already correctly set to 5 - match it here. */
+  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
@@ -687,18 +755,20 @@ static void MX_GPIO_Init(void) {
 
 /* USER CODE END 4 */
 
-/* USER CODE BEGIN Header_StartDefaultTask */
+/* USER CODE BEGIN Header_StartInitTask */
 /**
- * @brief  Function implementing the defaultTask thread.
+ * @brief  One-shot boot sequence: confirms the clock, brings up the app's
+ *         shared state, and marks the system healthy so Task_Watchdog
+ *         starts refreshing IWDG. After that it has no more init work, so
+ *         it becomes the alive-blink heartbeat (LED1) for the rest of the
+ *         run rather than exiting - a visibly blinking LED is a useful,
+ *         zero-cost "still running" indicator distinct from the IWDG.
  * @param  argument: Not used
  * @retval None
  */
-/* USER CODE END Header_StartDefaultTask */
-void StartDefaultTask(void *argument) {
+/* USER CODE END Header_StartInitTask */
+void StartInitTask(void *argument) {
   /* USER CODE BEGIN 5 */
-  /* First statement in the task, before any print/work: close the IWDG gap
-     immediately on entry. */
-  HAL_IWDG_Refresh(&hiwdg);
   {
     /* Force a fresh recompute of SystemCoreClock straight from the live
        RCC/PLL registers right here, right before printing, instead of
@@ -710,33 +780,52 @@ void StartDefaultTask(void *argument) {
     char init_msg[140];
     int ilen = snprintf(
         init_msg, sizeof(init_msg),
-        "StartDefaultTask init OK. SystemCoreClock=%lu Hz (post-update) "
-        "PLLCFGR=0x%08lX\r\n",
+        "InitTask: SystemCoreClock=%lu Hz (post-update) PLLCFGR=0x%08lX\r\n",
         (unsigned long)SystemCoreClock, (unsigned long)pllcfgr);
     if (ilen > 0) {
-      HAL_UART_Transmit(&huart2, (uint8_t *)init_msg, (uint16_t)ilen,
-                        HAL_MAX_DELAY);
+      Serial_Print(init_msg);
     }
   }
   DWT_Init();
-  uint32_t last_tick = HAL_GetTick();
-  /* Infinite loop */
-  for (;;) {
-    HAL_IWDG_Refresh(&hiwdg);
 
-    uint32_t now_tick = HAL_GetTick();
-    uint32_t elapsed_ms = now_tick - last_tick;
-    last_tick = now_tick;
-
-    RunPeripheralSelfTest();
-
-    char msg[64];
-    int len = snprintf(msg, sizeof(msg), "[LOOP] elapsed_ms=%lu\r\n\r\n",
-                       (unsigned long)elapsed_ms);
-    if (len > 0) {
-      HAL_UART_Transmit(&huart2, (uint8_t *)msg, (uint16_t)len, HAL_MAX_DELAY);
+  {
+    /* Clear the DS1307's clock-halt bit if needed (dead/first-power
+       battery), seeding it from this firmware's build timestamp in that
+       case only. If the battery-backed clock is already running, its
+       time is trusted over the build timestamp and left untouched. */
+    uint8_t rtc_was_halted = 0;
+    HAL_StatusTypeDef rtc_st = RTC_Init(&rtc_was_halted);
+    char rtc_msg[96];
+    int rlen;
+    if (rtc_st != HAL_OK) {
+      rlen = snprintf(rtc_msg, sizeof(rtc_msg),
+                       "InitTask: RTC_Init FAILED (I2C error) - logs will use "
+                       "FatFs's no-RTC placeholder date\r\n");
+    } else if (rtc_was_halted) {
+      RTC_DateTime_t dt = RTC_GetBuildDateTime();
+      rlen = snprintf(rtc_msg, sizeof(rtc_msg),
+                       "InitTask: RTC was halted - set from build time "
+                       "%04u-%02u-%02u %02u:%02u:%02u\r\n",
+                       dt.year, dt.month, dt.day, dt.hour, dt.min, dt.sec);
+    } else {
+      rlen = snprintf(rtc_msg, sizeof(rtc_msg),
+                       "InitTask: RTC already running (battery-backed time "
+                       "trusted)\r\n");
     }
+    if (rlen > 0) {
+      Serial_Print(rtc_msg);
+    }
+  }
 
+  /* Everything the other tasks need (mutexes, queues) was already created
+     in MX_FREERTOS_Init before any thread started - nothing left to set up
+     here. Mark the system healthy so Task_Watchdog begins refreshing. */
+  AppState_SetHealthy(1);
+  Serial_Print("InitTask: startup complete, system healthy\r\n");
+
+  /* Alive-blink heartbeat - the task's ongoing role from here on. */
+  for (;;) {
+    LED1_Toggle();
     osDelay(1000);
   }
   /* USER CODE END 5 */

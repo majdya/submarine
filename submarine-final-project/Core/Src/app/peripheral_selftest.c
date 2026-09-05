@@ -116,17 +116,20 @@ static void Test_RTC(void) {
 }
 
 static void Test_SDCard(void) {
-  uint8_t rx = 0;
-  HAL_StatusTypeDef st = SD_RawByteExchange(0xFF, &rx);
+  HAL_StatusTypeDef st = SD_Init();
   char msg[96];
   int len;
   if (st == HAL_OK) {
-    len = snprintf(msg, sizeof(msg),
-                   "[SD/SPI3] raw byte exchange OK, rx=0x%02X (not a real SD "
-                   "init yet)\r\n",
-                   rx);
+    const char *type;
+    switch (SD_GetCardType()) {
+      case SD_TYPE_SD2_SDHC: type = "SDHC/SDXC"; break;
+      case SD_TYPE_SD2_SDSC: type = "SDv2 SDSC"; break;
+      case SD_TYPE_SD1: type = "SDv1"; break;
+      default: type = "unknown"; break;
+    }
+    len = snprintf(msg, sizeof(msg), "[SD] init OK, type=%s\r\n", type);
   } else {
-    len = snprintf(msg, sizeof(msg), "[SD/SPI3] SPI error status=%d\r\n",
+    len = snprintf(msg, sizeof(msg), "[SD] init FAILED status=%d\r\n",
                    (int)st);
   }
   if (len > 0) {
