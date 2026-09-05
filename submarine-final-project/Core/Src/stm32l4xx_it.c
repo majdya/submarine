@@ -1,27 +1,28 @@
 /* USER CODE BEGIN Header */
 /**
-  ******************************************************************************
-  * @file    stm32l4xx_it.c
-  * @brief   Interrupt Service Routines.
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2026 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
+ ******************************************************************************
+ * @file    stm32l4xx_it.c
+ * @brief   Interrupt Service Routines.
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2026 STMicroelectronics.
+ * All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
 /* USER CODE END Header */
 
 /* Includes ------------------------------------------------------------------*/
-#include "main.h"
 #include "stm32l4xx_it.h"
+#include "main.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -51,7 +52,60 @@
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+/* huart2 is extern-declared further below in this file (after "External
+   variables"), but this block needs it earlier - redeclare here too
+   (harmless, same extern declaration twice is legal in C). */
+extern UART_HandleTypeDef huart2;
 
+/* Captures the exception stack frame + fault status registers on a hard
+   fault and dumps them over UART, so the actual fault cause is visible
+   without a debugger attached. This never returns. */
+typedef struct {
+  uint32_t r0, r1, r2, r3, r12, lr, pc, psr;
+} FaultStackFrame_t;
+
+void HardFault_Diagnostics(FaultStackFrame_t *frame) {
+  uint32_t cfsr = SCB->CFSR;
+  uint32_t hfsr = SCB->HFSR;
+  uint32_t mmfar = SCB->MMFAR;
+  uint32_t bfar = SCB->BFAR;
+
+  char buf[300];
+  int len = snprintf(
+      buf, sizeof(buf),
+      "\r\n*** HARD FAULT ***\r\n"
+      "PC=0x%08lX LR=0x%08lX PSR=0x%08lX\r\n"
+      "R0=0x%08lX R1=0x%08lX R2=0x%08lX R3=0x%08lX R12=0x%08lX\r\n"
+      "CFSR=0x%08lX HFSR=0x%08lX MMFAR=0x%08lX BFAR=0x%08lX\r\n"
+      "  MMARVALID=%lu BFARVALID=%lu FORCED=%lu VECTBL=%lu\r\n"
+      "  IBUSERR=%lu PRECISERR=%lu IMPRECISERR=%lu UNDEFINSTR=%lu "
+      "INVSTATE=%lu INVPC=%lu NOCP=%lu UNALIGNED=%lu DIVBYZERO=%lu\r\n",
+      (unsigned long)frame->pc, (unsigned long)frame->lr,
+      (unsigned long)frame->psr, (unsigned long)frame->r0,
+      (unsigned long)frame->r1, (unsigned long)frame->r2,
+      (unsigned long)frame->r3, (unsigned long)frame->r12, (unsigned long)cfsr,
+      (unsigned long)hfsr, (unsigned long)mmfar, (unsigned long)bfar,
+      (unsigned long)((cfsr >> 7) & 1UL) /* MMARVALID */,
+      (unsigned long)((cfsr >> 15) & 1UL) /* BFARVALID */,
+      (unsigned long)((hfsr >> 30) & 1UL) /* FORCED */,
+      (unsigned long)((hfsr >> 1) & 1UL) /* VECTTBL */,
+      (unsigned long)((cfsr >> 8) & 1UL) /* IBUSERR */,
+      (unsigned long)((cfsr >> 9) & 1UL) /* PRECISERR */,
+      (unsigned long)((cfsr >> 10) & 1UL) /* IMPRECISERR */,
+      (unsigned long)((cfsr >> 16) & 1UL) /* UNDEFINSTR */,
+      (unsigned long)((cfsr >> 18) & 1UL) /* INVSTATE */,
+      (unsigned long)((cfsr >> 19) & 1UL) /* INVPC */,
+      (unsigned long)((cfsr >> 20) & 1UL) /* NOCP */,
+      (unsigned long)((cfsr >> 24) & 1UL) /* UNALIGNED */,
+      (unsigned long)((cfsr >> 25) & 1UL) /* DIVBYZERO */);
+  if (len > 0) {
+    HAL_UART_Transmit(&huart2, (uint8_t *)buf, (uint16_t)len, HAL_MAX_DELAY);
+  }
+
+  __disable_irq();
+  while (1) {
+  }
+}
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
@@ -66,85 +120,78 @@ extern TIM_HandleTypeDef htim6;
 /*           Cortex-M4 Processor Interruption and Exception Handlers          */
 /******************************************************************************/
 /**
-  * @brief This function handles Non maskable interrupt.
-  */
-void NMI_Handler(void)
-{
+ * @brief This function handles Non maskable interrupt.
+ */
+void NMI_Handler(void) {
   /* USER CODE BEGIN NonMaskableInt_IRQn 0 */
 
   /* USER CODE END NonMaskableInt_IRQn 0 */
   /* USER CODE BEGIN NonMaskableInt_IRQn 1 */
-   while (1)
-  {
+  while (1) {
   }
   /* USER CODE END NonMaskableInt_IRQn 1 */
 }
 
 /**
-  * @brief This function handles Hard fault interrupt.
-  */
-void HardFault_Handler(void)
-{
+ * @brief This function handles Hard fault interrupt.
+ */
+void HardFault_Handler(void) {
   /* USER CODE BEGIN HardFault_IRQn 0 */
-
+  __asm volatile("TST LR, #4                \n"
+                 "ITE EQ                    \n"
+                 "MRSEQ R0, MSP              \n"
+                 "MRSNE R0, PSP              \n"
+                 "B HardFault_Diagnostics   \n");
   /* USER CODE END HardFault_IRQn 0 */
-  while (1)
-  {
+  while (1) {
     /* USER CODE BEGIN W1_HardFault_IRQn 0 */
     /* USER CODE END W1_HardFault_IRQn 0 */
   }
 }
 
 /**
-  * @brief This function handles Memory management fault.
-  */
-void MemManage_Handler(void)
-{
+ * @brief This function handles Memory management fault.
+ */
+void MemManage_Handler(void) {
   /* USER CODE BEGIN MemoryManagement_IRQn 0 */
 
   /* USER CODE END MemoryManagement_IRQn 0 */
-  while (1)
-  {
+  while (1) {
     /* USER CODE BEGIN W1_MemoryManagement_IRQn 0 */
     /* USER CODE END W1_MemoryManagement_IRQn 0 */
   }
 }
 
 /**
-  * @brief This function handles Prefetch fault, memory access fault.
-  */
-void BusFault_Handler(void)
-{
+ * @brief This function handles Prefetch fault, memory access fault.
+ */
+void BusFault_Handler(void) {
   /* USER CODE BEGIN BusFault_IRQn 0 */
 
   /* USER CODE END BusFault_IRQn 0 */
-  while (1)
-  {
+  while (1) {
     /* USER CODE BEGIN W1_BusFault_IRQn 0 */
     /* USER CODE END W1_BusFault_IRQn 0 */
   }
 }
 
 /**
-  * @brief This function handles Undefined instruction or illegal state.
-  */
-void UsageFault_Handler(void)
-{
+ * @brief This function handles Undefined instruction or illegal state.
+ */
+void UsageFault_Handler(void) {
   /* USER CODE BEGIN UsageFault_IRQn 0 */
 
   /* USER CODE END UsageFault_IRQn 0 */
-  while (1)
-  {
+  while (1) {
     /* USER CODE BEGIN W1_UsageFault_IRQn 0 */
     /* USER CODE END W1_UsageFault_IRQn 0 */
   }
 }
 
 /**
-  * @brief This function handles Debug monitor.
-  */
-void DebugMon_Handler(void)
-{
+ * @brief This function handles Debug monitor.
+ */
+void DebugMon_Handler(void) {
   /* USER CODE BEGIN DebugMonitor_IRQn 0 */
 
   /* USER CODE END DebugMonitor_IRQn 0 */
@@ -161,10 +208,9 @@ void DebugMon_Handler(void)
 /******************************************************************************/
 
 /**
-  * @brief This function handles EXTI line3 interrupt.
-  */
-void EXTI3_IRQHandler(void)
-{
+ * @brief This function handles EXTI line3 interrupt.
+ */
+void EXTI3_IRQHandler(void) {
   /* USER CODE BEGIN EXTI3_IRQn 0 */
 
   /* USER CODE END EXTI3_IRQn 0 */
@@ -175,10 +221,9 @@ void EXTI3_IRQHandler(void)
 }
 
 /**
-  * @brief This function handles USART2 global interrupt.
-  */
-void USART2_IRQHandler(void)
-{
+ * @brief This function handles USART2 global interrupt.
+ */
+void USART2_IRQHandler(void) {
   /* USER CODE BEGIN USART2_IRQn 0 */
 
   /* USER CODE END USART2_IRQn 0 */
@@ -189,10 +234,9 @@ void USART2_IRQHandler(void)
 }
 
 /**
-  * @brief This function handles EXTI line[15:10] interrupts.
-  */
-void EXTI15_10_IRQHandler(void)
-{
+ * @brief This function handles EXTI line[15:10] interrupts.
+ */
+void EXTI15_10_IRQHandler(void) {
   /* USER CODE BEGIN EXTI15_10_IRQn 0 */
 
   /* USER CODE END EXTI15_10_IRQn 0 */
@@ -203,10 +247,10 @@ void EXTI15_10_IRQHandler(void)
 }
 
 /**
-  * @brief This function handles TIM6 global interrupt, DAC channel1 and channel2 underrun error interrupts.
-  */
-void TIM6_DAC_IRQHandler(void)
-{
+ * @brief This function handles TIM6 global interrupt, DAC channel1 and channel2
+ * underrun error interrupts.
+ */
+void TIM6_DAC_IRQHandler(void) {
   /* USER CODE BEGIN TIM6_DAC_IRQn 0 */
 
   /* USER CODE END TIM6_DAC_IRQn 0 */
