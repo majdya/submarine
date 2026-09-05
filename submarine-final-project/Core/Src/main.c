@@ -22,8 +22,21 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "app_comm.h"
+#include "app_event.h"
+#include "app_log.h"
+#include "app_serial.h"
+#include "app_config.h"
+#include "app_state.h"
+#include "rtc_ds1307.h"
 #include "dwt_delay.h"
+#include "indicators.h"
 #include "peripheral_selftest.h"
+#include "task_comm.h"
+#include "task_event.h"
+#include "task_log.h"
+#include "task_monitor.h"
+#include "task_watchdog.h"
 #include <stdio.h>
 #include <string.h>
 /* USER CODE END Includes */
@@ -57,12 +70,49 @@ TIM_HandleTypeDef htim3;
 
 UART_HandleTypeDef huart2;
 
-/* Definitions for defaultTask */
-osThreadId_t defaultTaskHandle;
-const osThreadAttr_t defaultTask_attributes = {
-    .name = "defaultTask",
+/* Definitions for InitTask - one-shot boot sequence, then becomes the
+   alive-blink heartbeat for the rest of the run. */
+osThreadId_t initTaskHandle;
+const osThreadAttr_t initTask_attributes = {
+    .name = "InitTask",
     .stack_size = 512 * 4,
     .priority = (osPriority_t)osPriorityNormal,
+};
+
+osThreadId_t monitorTaskHandle;
+const osThreadAttr_t monitorTask_attributes = {
+    .name = "MonitorTask",
+    .stack_size = 512 * 4,
+    .priority = (osPriority_t)osPriorityNormal,
+};
+
+osThreadId_t eventTaskHandle;
+const osThreadAttr_t eventTask_attributes = {
+    .name = "EventTask",
+    .stack_size = 384 * 4,
+    .priority = (osPriority_t)osPriorityNormal,
+};
+
+osThreadId_t logTaskHandle;
+const osThreadAttr_t logTask_attributes = {
+    .name = "LogTask",
+    .stack_size = 768 * 4, /* FatFs (f_open/f_write/f_mkfs) needs more
+                              headroom than plain GPIO/SPI calls */
+    .priority = (osPriority_t)osPriorityBelowNormal,
+};
+
+osThreadId_t commTaskHandle;
+const osThreadAttr_t commTask_attributes = {
+    .name = "CommTask",
+    .stack_size = 384 * 4,
+    .priority = (osPriority_t)osPriorityAboveNormal,
+};
+
+osThreadId_t watchdogTaskHandle;
+const osThreadAttr_t watchdogTask_attributes = {
+    .name = "WatchdogTask",
+    .stack_size = 256 * 4,
+    .priority = (osPriority_t)osPriorityHigh,
 };
 /* USER CODE BEGIN PV */
 
@@ -79,7 +129,7 @@ static void MX_ADC2_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_I2C3_Init(void);
 static void MX_SPI1_Init(void);
-void StartDefaultTask(void *argument);
+void StartInitTask(void *argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -87,7 +137,18 @@ void StartDefaultTask(void *argument);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+/* MX_IWDG_Init() is commented out again below - re-enabling it caused a
+   real boot loop on hardware (see the comment at the call site). Several
+   call sites still (correctly) try to refresh it defensively before it
+   may exist - this guards every one of them against calling into a
+   zero-initialized hiwdg.Instance. */
+uint8_t IwdgIsInitialized(void) { return hiwdg.Instance != NULL; }
 
+static void SafeIwdgRefresh(void) {
+  if (IwdgIsInitialized()) {
+    HAL_IWDG_Refresh(&hiwdg);
+  }
+}
 /* USER CODE END 0 */
 
 /**
@@ -111,9 +172,16 @@ int main(void) {
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  /* MX_IWDG_Init(); */ /* IWDG temporarily disabled for debugging - it cannot
-                           be stopped once started, so simply not starting it is
-                           the only way to take it out of the picture. */
+  /* REVERTED (again): re-enabling this caused an immediate boot loop on
+     real hardware - CSR showed IWDGRSTF every cycle, cut off partway
+     through StartInitTask's very first print, well under the expected
+     ~4s window. Root cause not yet found (heap/mutex accounting for the
+     new app_config module was checked and looks fine on paper; DBGMCU
+     not freezing IWDG during a debugger-attached flash/reset is also a
+     candidate, since ST-Link can hold the core briefly around reset).
+     Disabling again until this is actually diagnosed against real
+     hardware behavior instead of guessed at from here. */
+  /* MX_IWDG_Init(); */
   MX_USART2_UART_Init();
   MX_ADC1_Init();
   MX_ADC2_Init();
@@ -139,17 +207,18 @@ int main(void) {
                         HAL_MAX_DELAY);
     }
   }
-  HAL_IWDG_Refresh(&hiwdg);
+  SafeIwdgRefresh();
 
   /* NOTE: previously this block manually re-initialized PA5 as a plain GPIO
-     output for an "alive" blink. PA5 is now SPI1_SCK (alternate function,
-     used by the SD card) - that manual HAL_GPIO_Init() ran AFTER
-     MX_SPI1_Init() and silently overwrote SPI1's SCK pin config back to
-     plain GPIO, breaking SPI1. Removed. LED1 (PC5) is already a clean,
-     conflict-free GPIO output configured by MX_GPIO_Init() - use it for the
-     alive indicator instead (see the toggle in StartDefaultTask). */
+     output for an "alive" blink, which used to collide with SPI1_SCK on
+     that same pin. Removed. LED1 (PC5) is already a clean, conflict-free
+     GPIO output configured by MX_GPIO_Init() - use it for the alive
+     indicator instead (now the alive-blink in StartInitTask). SD card SPI
+     stays on SPI1/PA5-6-7 + PB6 CS - the SD/RTC shield's traces are
+     hard-wired there and can't be moved, so those pins permanently share
+     duty with the sensor shield's RGB LED (Green/Blue) and D12 LED. */
 
-  HAL_IWDG_Refresh(&hiwdg);
+  SafeIwdgRefresh();
   {
     const char *msg = "Submarine LNC boot OK - v0.1 \r\n";
     HAL_UART_Transmit(&huart2, (uint8_t *)msg, strlen(msg), HAL_MAX_DELAY);
@@ -160,7 +229,9 @@ int main(void) {
   osKernelInitialize();
 
   /* USER CODE BEGIN RTOS_MUTEX */
-  /* add mutexes, ... */
+  Serial_Init();
+  AppState_Init();
+  AppConfig_Init();
   /* USER CODE END RTOS_MUTEX */
 
   /* USER CODE BEGIN RTOS_SEMAPHORES */
@@ -172,26 +243,32 @@ int main(void) {
   /* USER CODE END RTOS_TIMERS */
 
   /* USER CODE BEGIN RTOS_QUEUES */
-  /* add queues, ... */
+  AppEvent_QueueCreate();
+  AppLog_QueueCreate();
+  AppComm_QueueCreate();
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
-  /* creation of defaultTask */
-  defaultTaskHandle =
-      osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
+  /* creation of InitTask */
+  initTaskHandle = osThreadNew(StartInitTask, NULL, &initTask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
-  /* add threads, ... */
+  monitorTaskHandle = osThreadNew(Task_Monitor, NULL, &monitorTask_attributes);
+  eventTaskHandle = osThreadNew(Task_Event, NULL, &eventTask_attributes);
+  logTaskHandle = osThreadNew(Task_Log, NULL, &logTask_attributes);
+  commTaskHandle = osThreadNew(Task_Comm, NULL, &commTask_attributes);
+  watchdogTaskHandle =
+      osThreadNew(Task_Watchdog, NULL, &watchdogTask_attributes);
   /* USER CODE END RTOS_THREADS */
 
   /* USER CODE BEGIN RTOS_EVENTS */
   /* add events, ... */
   /* USER CODE END RTOS_EVENTS */
 
-  /* Close the gap: nothing refreshes IWDG between here and StartDefaultTask's
+  /* Close the gap: nothing refreshes IWDG between here and Task_Watchdog's
      first refresh, and osKernelStart() + first context switch is not
      instant. Refresh right before handing off. */
-  HAL_IWDG_Refresh(&hiwdg);
+  SafeIwdgRefresh();
 
   /* Start scheduler */
   osKernelStart();
@@ -205,8 +282,9 @@ int main(void) {
 
     /* USER CODE BEGIN 3 */
     /* Unreachable once osKernelStart() succeeds - real application code lives
-       in StartDefaultTask(). This loop only runs if the scheduler fails to
-       start, which should never happen; kept empty on purpose. */
+       in StartInitTask() and the other app tasks. This loop only runs if the
+       scheduler fails to start, which should never happen; kept empty on
+       purpose. */
   }
   /* USER CODE END 3 */
 }
@@ -331,7 +409,7 @@ static void MX_ADC1_Init(void) {
    */
   sConfig.Channel = ADC_CHANNEL_6;
   sConfig.Rank = ADC_REGULAR_RANK_1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_2CYCLES_5;
+  sConfig.SamplingTime = ADC_SAMPLETIME_92CYCLES_5;
   sConfig.SingleDiff = ADC_SINGLE_ENDED;
   sConfig.OffsetNumber = ADC_OFFSET_NONE;
   sConfig.Offset = 0;
@@ -393,7 +471,7 @@ static void MX_ADC2_Init(void) {
    */
   sConfig.Channel = ADC_CHANNEL_5;
   sConfig.Rank = ADC_REGULAR_RANK_1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_2CYCLES_5;
+  sConfig.SamplingTime = ADC_SAMPLETIME_92CYCLES_5;
   sConfig.SingleDiff = ADC_SINGLE_ENDED;
   sConfig.OffsetNumber = ADC_OFFSET_NONE;
   sConfig.Offset = 0;
@@ -478,7 +556,15 @@ static void MX_IWDG_Init(void) {
  * @brief SPI1 Initialization Function
  * @param None
  * @retval None
- */
+ *
+ * Reverted back to SPI1 (PA5/6/7 + PB6 CS): the SD/RTC data-logger
+ * shield's SD slot is hard-wired on its PCB to the Arduino SPI pins
+ * (D13/D12/D11/D10 = PA5/PA6/PA7/PB6) - it cannot be moved. The other
+ * sensor shield's RGB LED sits on D9-D11 of the same header and both
+ * shields are stacked together, so D10/D11 (PB6/PA7) are physically
+ * shared between the SD card's CS/MOSI and the RGB LED's Green/Blue
+ * legs - that overlap is a real hardware limit of this stack, not
+ * something firmware can resolve. */
 static void MX_SPI1_Init(void) {
 
   /* USER CODE BEGIN SPI1_Init 0 */
@@ -616,7 +702,8 @@ static void MX_GPIO_Init(void) {
   HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, LED2_Pin | GPIO_PIN_6, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOB, LED2_Pin | SD_CS_Pin,
+                    GPIO_PIN_SET); /* SD_CS_Pin (PB6) idle deselected */
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET);
@@ -628,8 +715,8 @@ static void MX_GPIO_Init(void) {
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LED1_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : LED2_Pin PB6 */
-  GPIO_InitStruct.Pin = LED2_Pin | GPIO_PIN_6;
+  /*Configure GPIO pins : LED2_Pin SD_CS_Pin (PB6, SPI1 manual CS) */
+  GPIO_InitStruct.Pin = LED2_Pin | SD_CS_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -658,7 +745,15 @@ static void MX_GPIO_Init(void) {
   HAL_NVIC_SetPriority(EXTI3_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(EXTI3_IRQn);
 
-  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
+  /* Priority 0 here (the original CubeMX default) is ABOVE
+     configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY (5, see FreeRTOSConfig.h)
+     - an ISR that urgent is not allowed to call any FreeRTOS API
+     (osMessageQueuePut, called from HAL_GPIO_EXTI_Callback via
+     AppEvent_Post). Doing so corrupts the kernel rather than faulting
+     cleanly, which is exactly what 'presses this button, firmware
+     hangs, only a hardware reset recovers it' looks like. EXTI3
+     (Object Detect) was already correctly set to 5 - match it here. */
+  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
@@ -670,18 +765,20 @@ static void MX_GPIO_Init(void) {
 
 /* USER CODE END 4 */
 
-/* USER CODE BEGIN Header_StartDefaultTask */
+/* USER CODE BEGIN Header_StartInitTask */
 /**
- * @brief  Function implementing the defaultTask thread.
+ * @brief  One-shot boot sequence: confirms the clock, brings up the app's
+ *         shared state, and marks the system healthy so Task_Watchdog
+ *         starts refreshing IWDG. After that it has no more init work, so
+ *         it becomes the alive-blink heartbeat (LED1) for the rest of the
+ *         run rather than exiting - a visibly blinking LED is a useful,
+ *         zero-cost "still running" indicator distinct from the IWDG.
  * @param  argument: Not used
  * @retval None
  */
-/* USER CODE END Header_StartDefaultTask */
-void StartDefaultTask(void *argument) {
+/* USER CODE END Header_StartInitTask */
+void StartInitTask(void *argument) {
   /* USER CODE BEGIN 5 */
-  /* First statement in the task, before any print/work: close the IWDG gap
-     immediately on entry. */
-  HAL_IWDG_Refresh(&hiwdg);
   {
     /* Force a fresh recompute of SystemCoreClock straight from the live
        RCC/PLL registers right here, right before printing, instead of
@@ -693,33 +790,52 @@ void StartDefaultTask(void *argument) {
     char init_msg[140];
     int ilen = snprintf(
         init_msg, sizeof(init_msg),
-        "StartDefaultTask init OK. SystemCoreClock=%lu Hz (post-update) "
-        "PLLCFGR=0x%08lX\r\n",
+        "InitTask: SystemCoreClock=%lu Hz (post-update) PLLCFGR=0x%08lX\r\n",
         (unsigned long)SystemCoreClock, (unsigned long)pllcfgr);
     if (ilen > 0) {
-      HAL_UART_Transmit(&huart2, (uint8_t *)init_msg, (uint16_t)ilen,
-                        HAL_MAX_DELAY);
+      Serial_Print(init_msg);
     }
   }
   DWT_Init();
-  uint32_t last_tick = HAL_GetTick();
-  /* Infinite loop */
-  for (;;) {
-    HAL_IWDG_Refresh(&hiwdg);
 
-    uint32_t now_tick = HAL_GetTick();
-    uint32_t elapsed_ms = now_tick - last_tick;
-    last_tick = now_tick;
-
-    RunPeripheralSelfTest();
-
-    char msg[64];
-    int len = snprintf(msg, sizeof(msg), "[LOOP] elapsed_ms=%lu\r\n\r\n",
-                       (unsigned long)elapsed_ms);
-    if (len > 0) {
-      HAL_UART_Transmit(&huart2, (uint8_t *)msg, (uint16_t)len, HAL_MAX_DELAY);
+  {
+    /* Clear the DS1307's clock-halt bit if needed (dead/first-power
+       battery), seeding it from this firmware's build timestamp in that
+       case only. If the battery-backed clock is already running, its
+       time is trusted over the build timestamp and left untouched. */
+    uint8_t rtc_was_halted = 0;
+    HAL_StatusTypeDef rtc_st = RTC_Init(&rtc_was_halted);
+    char rtc_msg[96];
+    int rlen;
+    if (rtc_st != HAL_OK) {
+      rlen = snprintf(rtc_msg, sizeof(rtc_msg),
+                       "InitTask: RTC_Init FAILED (I2C error) - logs will use "
+                       "FatFs's no-RTC placeholder date\r\n");
+    } else if (rtc_was_halted) {
+      RTC_DateTime_t dt = RTC_GetBuildDateTime();
+      rlen = snprintf(rtc_msg, sizeof(rtc_msg),
+                       "InitTask: RTC was halted - set from build time "
+                       "%04u-%02u-%02u %02u:%02u:%02u\r\n",
+                       dt.year, dt.month, dt.day, dt.hour, dt.min, dt.sec);
+    } else {
+      rlen = snprintf(rtc_msg, sizeof(rtc_msg),
+                       "InitTask: RTC already running (battery-backed time "
+                       "trusted)\r\n");
     }
+    if (rlen > 0) {
+      Serial_Print(rtc_msg);
+    }
+  }
 
+  /* Everything the other tasks need (mutexes, queues) was already created
+     in MX_FREERTOS_Init before any thread started - nothing left to set up
+     here. Mark the system healthy so Task_Watchdog begins refreshing. */
+  AppState_SetHealthy(1);
+  Serial_Print("InitTask: startup complete, system healthy\r\n");
+
+  /* Alive-blink heartbeat - the task's ongoing role from here on. */
+  for (;;) {
+    LED1_Toggle();
     osDelay(1000);
   }
   /* USER CODE END 5 */

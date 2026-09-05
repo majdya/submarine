@@ -19,6 +19,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32l4xx_it.h"
+#include "app_event.h"
 #include "main.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -104,6 +105,36 @@ void HardFault_Diagnostics(FaultStackFrame_t *frame) {
 
   __disable_irq();
   while (1) {
+  }
+}
+
+/* Object Detection and the Silence button are both configured as
+   EXTI-falling-edge inputs, but nothing implemented this callback
+   before now - the interrupts fired and did nothing. Object
+   Detection has no task of its own by design: this ISR is its
+   entire implementation, posting straight into the event queue for
+   Task_Event to pick up. */
+#define BUTTON_DEBOUNCE_MS 200u
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+  /* Mechanical switch bounce fires several falling edges per physical
+     press - HAL_GetTick() is safe to read from ISR context (it's just the
+     SysTick-incremented counter), and unsigned subtraction handles the
+     ~49-day wraparound correctly without special-casing it. */
+  static uint32_t last_objdetect_tick = 0;
+  static uint32_t last_silence_tick = 0;
+  uint32_t now = HAL_GetTick();
+
+  if (GPIO_Pin == GPIO_PIN_3) {
+    if ((uint32_t)(now - last_objdetect_tick) >= BUTTON_DEBOUNCE_MS) {
+      last_objdetect_tick = now;
+      AppEvent_Post(EVENT_OBJECT_DETECTED, 0);
+    }
+  } else if (GPIO_Pin == SILENCE_Pin) {
+    if ((uint32_t)(now - last_silence_tick) >= BUTTON_DEBOUNCE_MS) {
+      last_silence_tick = now;
+      AppEvent_Post(EVENT_SILENCE_PRESSED, 0);
+    }
   }
 }
 /* USER CODE END 0 */
