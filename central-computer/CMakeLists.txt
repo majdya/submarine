@@ -38,6 +38,9 @@ add_library(central_computer_lib STATIC
   src/combat_submarine.cpp
   src/fleet.cpp
   src/menu.cpp
+  src/http_server.cpp
+  src/dashboard_api.cpp
+  src/dashboard_html.cpp
 )
 target_include_directories(central_computer_lib PUBLIC include)
 target_link_libraries(central_computer_lib PUBLIC protocol)

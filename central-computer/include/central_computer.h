@@ -2,6 +2,8 @@
 #define CENTRAL_COMPUTER_CENTRAL_COMPUTER_H
 
 #include <memory>
+#include <mutex>
+#include <optional>
 #include <string>
 
 #include "comm_link.h"
@@ -32,6 +34,20 @@ namespace submarine {
 // reports false for it until/unless something feeds it, same as a real
 // port that hasn't been opened. Only the one CombatSubmarine actually
 // wired to the lab hardware is constructed with a real SerialTransport.
+// The most recent KEEPALIVE the Communication module received, kept for
+// live display (the web dashboard - see dashboard_api.h) rather than
+// requiring a reader to go back through DataStore's persisted history for
+// "what is this submarine doing right now".
+struct LiveSnapshot {
+  bool hasData = false;
+  std::string receivedAtHms;
+  uint8_t mode = 0;
+  uint32_t lightRaw = 0, tempAdcRaw = 0, batteryRaw = 0;
+  uint8_t dhtTemp = 0, dhtHumidity = 0, dhtValid = 0;
+  std::string lastEventDescription;  // e.g. "OBJECT_DETECTED", empty if none seen yet
+  std::string lastEventAtHms;
+};
+
 class CentralComputer {
  public:
   explicit CentralComputer(std::string logDir, std::string dataDir,
@@ -56,6 +72,10 @@ class CentralComputer {
 
   void enforceLogRetention(uint32_t todayYmd) { logModule_.enforceRetention(todayYmd); }
 
+  // Thread-safe: safe to call from a web dashboard thread while CommLink's
+  // reader thread is concurrently updating it.
+  LiveSnapshot latestSnapshot() const;
+
  private:
   void onUnsolicited(const proto::Message& msg);
 
@@ -65,6 +85,9 @@ class CentralComputer {
   LogModule logModule_;
   DataCollection dataCollection_;
   ManagementCommand managementCommand_;
+
+  mutable std::mutex snapshotMutex_;
+  LiveSnapshot snapshot_;
 };
 
 }  // namespace submarine

@@ -48,6 +48,13 @@ void CentralComputer::disconnect() {
 
 bool CentralComputer::isConnected() const { return transport_->isOpen(); }
 
+namespace {
+const char* eventName(uint8_t type) {
+  static const char* kNames[] = {"?", "OBJECT_DETECTED", "OBJECT_CLEARED", "SILENCE_PRESSED", "MODE_CHANGED"};
+  return (type < 5) ? kNames[type] : "?";
+}
+}  // namespace
+
 void CentralComputer::onUnsolicited(const proto::Message& msg) {
   uint32_t ymd;
   std::string hms;
@@ -56,10 +63,33 @@ void CentralComputer::onUnsolicited(const proto::Message& msg) {
   if (msg.type == MSG_TYPE_KEEPALIVE) {
     logModule_.recordKeepAlive(msg, ymd, hms);
     dataCollection_.recordKeepAlive(msg, ymd, hms);
+
+    std::lock_guard<std::mutex> lock(snapshotMutex_);
+    snapshot_.hasData = true;
+    snapshot_.receivedAtHms = hms;
+    if (auto f = msg.find(TAG_MODE)) snapshot_.mode = f->asU8().value_or(0);
+    if (auto f = msg.find(TAG_LIGHT_RAW)) snapshot_.lightRaw = f->asU32().value_or(0);
+    if (auto f = msg.find(TAG_TEMP_ADC_RAW)) snapshot_.tempAdcRaw = f->asU32().value_or(0);
+    if (auto f = msg.find(TAG_BATTERY_RAW)) snapshot_.batteryRaw = f->asU32().value_or(0);
+    if (auto f = msg.find(TAG_DHT_TEMP)) snapshot_.dhtTemp = f->asU8().value_or(0);
+    if (auto f = msg.find(TAG_DHT_HUMIDITY)) snapshot_.dhtHumidity = f->asU8().value_or(0);
+    if (auto f = msg.find(TAG_DHT_VALID)) snapshot_.dhtValid = f->asU8().value_or(0);
   } else if (msg.type == MSG_TYPE_EVENT) {
     logModule_.recordEvent(msg, ymd, hms);
     dataCollection_.recordEvent(msg, ymd, hms);
+
+    std::lock_guard<std::mutex> lock(snapshotMutex_);
+    snapshot_.hasData = true;
+    uint8_t eventType = msg.find(TAG_EVENT_TYPE) ? msg.find(TAG_EVENT_TYPE)->asU8().value_or(0) : 0;
+    snapshot_.lastEventDescription = eventName(eventType);
+    snapshot_.lastEventAtHms = hms;
+    if (auto f = msg.find(TAG_MODE)) snapshot_.mode = f->asU8().value_or(0);
   }
+}
+
+LiveSnapshot CentralComputer::latestSnapshot() const {
+  std::lock_guard<std::mutex> lock(snapshotMutex_);
+  return snapshot_;
 }
 
 }  // namespace submarine

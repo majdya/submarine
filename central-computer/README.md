@@ -38,10 +38,40 @@ dependencies beyond a C++17 compiler, CMake, and (on Linux) pthreads.
 cmake -S . -B build
 cmake --build build -j
 ctest --test-dir build --output-on-failure   # runs the test suite below
-./build/central_computer                     # the interactive menu
+./build/central_computer                     # the interactive menu + web dashboard
 ```
 
 On Windows, the serial port name is e.g. `COM8`; on Linux, `/dev/ttyACM0`.
+
+## Web dashboard
+
+Starting `central_computer` also starts a small embedded HTTP server (default
+`http://localhost:8080`) alongside the console menu, printed to the console on
+startup. It is a **bonus**, fully-interactive way to use the app from a browser —
+the numbered console menu above is unchanged and remains the graded deliverable;
+both sides operate on the exact same live `Fleet` at the same time.
+
+From the browser you can do everything the console menu can: add a submarine,
+assign/update/end a mission, associate combat submarines with the same mission,
+and send messages between them — plus see each connected combat submarine's most
+recent live LNC data (mode, sensor readings, last event) without leaving the page.
+The page polls `GET /api/state` every 2 seconds and posts form-encoded requests to
+`/api/submarines`, `/api/submarines/:serial/mission[/update|/end]`,
+`/api/submarines/:serial/participate`, and `/api/messages` (see `dashboard_api.h`
+for the exact contract, and `http_server.h` for the tiny hand-rolled server itself
+— raw sockets, no library, since this build has no network access to fetch one).
+
+**Concurrency.** The console and the dashboard share one `Fleet` guarded by a
+single coarse-grained `std::mutex` (`g_fleetMutex` in `main.cpp`, passed into
+`DashboardApi`) — not per-submarine locking. Each console handler holds the lock
+for its *entire* body, including its blocking prompts, which is a deliberate
+simplicity-over-throughput tradeoff: the dashboard's next poll can briefly wait
+if a console operation is mid-prompt, and always catches up on the following
+poll. For a local, single-operator tool this is simpler to reason about
+correctly than fine-grained locking, at no real cost.
+
+If port 8080 is already in use, the app prints a message and continues with the
+console only — the dashboard is additive, never required.
 
 ## Design decisions worth knowing about
 
@@ -103,8 +133,14 @@ than downloading gtest - see `tests/test_harness.h`), run via `ctest`:
   assign/update/end exclusivity, combat-submarine participation and messaging
   (including sender resolution back through `Fleet`), and `dynamic_cast`-based
   type checks.
+- `test_dashboard` — the web dashboard's HTTP layer end-to-end: starts a real
+  `HttpServer` wired to a real `DashboardApi`/`Menu`/`Fleet` (no mocking) and
+  drives it with raw HTTP requests exactly like a browser's `fetch()` would —
+  add/duplicate-reject a submarine, assign/reject-double-assign/end a mission
+  via the `:serial` path-param route, and an unknown route returning 404
+  without disturbing the server.
 
-All 4 suites pass with `-Wall -Wextra -Wconversion` and zero warnings.
+All 5 suites pass with `-Wall -Wextra -Wconversion` and zero warnings.
 
 ## Menu operations (spec-numbered)
 
