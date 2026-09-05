@@ -6,11 +6,12 @@
 #include "rtc_ds1307.h"
 #include <stdio.h>
 
-/* Comm messages stay short placeholder text for the (not-yet-designed)
-   PC-side protocol - AppCommMsg_t's buffer is unchanged. The log line is
-   the one that needs real detail (timestamp + sensor snapshot), since
-   that's what actually lands in LOG.TXT and in the serial trace people
-   read for diagnosis. */
+/* Two different names for the same event, for two different audiences:
+   FormatEventName is the human-readable form that goes in LOG.TXT and the
+   diagnostic serial trace. FormatEventField is the wire-protocol field
+   Task_Comm frames into a $LNC,EVT,...*CHK sentence for the (not yet
+   built) PC-side app - plain SCREAMING_CASE tokens, comma-separated
+   fields, no spaces, easy for a simple parser to split on ','. */
 static void FormatEventName(AppEventType_t type, uint32_t value, char *out,
                              size_t out_len) {
   switch (type) {
@@ -25,6 +26,24 @@ static void FormatEventName(AppEventType_t type, uint32_t value, char *out,
       break;
     default:
       snprintf(out, out_len, "EVENT unknown type=%d", (int)type);
+      break;
+  }
+}
+
+static void FormatEventField(AppEventType_t type, uint32_t value, char *out,
+                              size_t out_len) {
+  switch (type) {
+    case EVENT_OBJECT_DETECTED:
+      snprintf(out, out_len, "OBJECT_DETECTED");
+      break;
+    case EVENT_SILENCE_PRESSED:
+      snprintf(out, out_len, "SILENCE_PRESSED");
+      break;
+    case EVENT_SENSOR_THRESHOLD:
+      snprintf(out, out_len, "THRESHOLD,%lu", (unsigned long)value);
+      break;
+    default:
+      snprintf(out, out_len, "UNKNOWN,%d", (int)type);
       break;
   }
 }
@@ -46,9 +65,9 @@ void Task_Event(void *argument) {
     char name[40];
     FormatEventName(evt.type, evt.value, name, sizeof(name));
 
-    char comm_line[APP_COMM_MSG_LEN];
-    snprintf(comm_line, sizeof(comm_line), "%s", name);
-    AppComm_Post(comm_line);
+    char comm_field[APP_COMM_MSG_LEN];
+    FormatEventField(evt.type, evt.value, comm_field, sizeof(comm_field));
+    AppComm_Post(comm_field);
 
     RTC_DateTime_t dt;
     uint8_t have_time = (RTC_GetDateTime(&dt) == HAL_OK);
@@ -60,20 +79,18 @@ void Task_Event(void *argument) {
     if (have_time) {
       snprintf(log_line, sizeof(log_line),
                "%04u-%02u-%02u %02u:%02u:%02u %s light=%lu tempADC=%lu "
-               "batt=%lu humADC=%lu dht=%u/%u%s",
+               "batt=%lu dht=%u/%u%s",
                dt.year, dt.month, dt.day, dt.hour, dt.min, dt.sec, name,
                (unsigned long)state.light_raw, (unsigned long)state.temp_raw,
-               (unsigned long)state.battery_raw,
-               (unsigned long)state.humidity_adc_raw, state.dht11_temp_int,
+               (unsigned long)state.battery_raw, state.dht11_temp_int,
                state.dht11_humidity_int, state.dht11_valid ? "" : "(invalid)");
     } else {
       snprintf(log_line, sizeof(log_line),
-               "[no-RTC] %s light=%lu tempADC=%lu batt=%lu humADC=%lu "
-               "dht=%u/%u%s",
+               "[no-RTC] %s light=%lu tempADC=%lu batt=%lu dht=%u/%u%s",
                name, (unsigned long)state.light_raw,
                (unsigned long)state.temp_raw, (unsigned long)state.battery_raw,
-               (unsigned long)state.humidity_adc_raw, state.dht11_temp_int,
-               state.dht11_humidity_int, state.dht11_valid ? "" : "(invalid)");
+               state.dht11_temp_int, state.dht11_humidity_int,
+               state.dht11_valid ? "" : "(invalid)");
     }
     AppLog_Post(log_line);
   }

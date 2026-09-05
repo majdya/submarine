@@ -15,7 +15,6 @@ typedef struct {
   uint32_t light_raw;
   uint32_t temp_raw;
   uint32_t battery_raw;
-  uint32_t humidity_adc_raw;
 
   uint8_t dht11_humidity_int;
   uint8_t dht11_temp_int;

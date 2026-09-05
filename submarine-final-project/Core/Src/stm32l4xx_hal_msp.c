@@ -140,11 +140,6 @@ void HAL_ADC_MspInit(ADC_HandleTypeDef* hadc)
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-    GPIO_InitStruct.Pin = Humidity_ADC_Pin;
-    GPIO_InitStruct.Mode = GPIO_MODE_ANALOG_ADC_CONTROL;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    HAL_GPIO_Init(Humidity_ADC_GPIO_Port, &GPIO_InitStruct);
-
     /* USER CODE BEGIN ADC2_MspInit 1 */
 
     /* USER CODE END ADC2_MspInit 1 */
@@ -199,8 +194,6 @@ void HAL_ADC_MspDeInit(ADC_HandleTypeDef* hadc)
     PB0     ------> ADC2_IN15
     */
     HAL_GPIO_DeInit(GPIOA, ADC_BATTERY_Pin|ADC_LIGHT_Pin);
-
-    HAL_GPIO_DeInit(Humidity_ADC_GPIO_Port, Humidity_ADC_Pin);
 
     /* USER CODE BEGIN ADC2_MspDeInit 1 */
 

@@ -53,6 +53,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/app/rtc_ds1307.c
     Core/Src/app/sdcard.c
     Core/Src/app/peripheral_selftest.c
+    Core/Src/app/app_config.c
     Core/Src/app/app_state.c
     Core/Src/app/app_event.c
     Core/Src/app/app_log.c

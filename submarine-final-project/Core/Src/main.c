@@ -26,6 +26,7 @@
 #include "app_event.h"
 #include "app_log.h"
 #include "app_serial.h"
+#include "app_config.h"
 #include "app_state.h"
 #include "rtc_ds1307.h"
 #include "dwt_delay.h"
@@ -136,10 +137,10 @@ void StartInitTask(void *argument);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-/* MX_IWDG_Init() is currently commented out below (disabled while
-   validating hardware). Several call sites still (correctly) try to
-   refresh it defensively before it may exist - this guards every one
-   of them against calling into a zero-initialized hiwdg.Instance. */
+/* IWDG is enabled now (see MX_IWDG_Init() call in main()), but this guard
+   stays: it's what made every HAL_IWDG_Refresh() call site safe to write
+   defensively back when IWDG was still disabled, and keeping it costs
+   nothing if IWDG is ever disabled again for debugging. */
 uint8_t IwdgIsInitialized(void) { return hiwdg.Instance != NULL; }
 
 static void SafeIwdgRefresh(void) {
@@ -170,9 +171,15 @@ int main(void) {
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  /* MX_IWDG_Init(); */ /* IWDG temporarily disabled for debugging - it cannot
-                           be stopped once started, so simply not starting it is
-                           the only way to take it out of the picture. */
+  /* Re-enabled: SD/FatFs and the DS1307 RTC (the two blocking-call paths
+     that made IWDG risky to leave on) are now proven stable over many
+     boots - see the "how urgent is the IWDG" discussion. It cannot be
+     stopped once started, so if this ever needs to come back out, revert
+     to commenting this call rather than trying to disable it at runtime.
+     ~4s timeout (IWDG_PRESCALER_64, Reload=2000, LSI ~32kHz) against a
+     250ms Task_Watchdog refresh - ample margin as long as the scheduler
+     is alive; only real kernel-level lockups will trip it. */
+  MX_IWDG_Init();
   MX_USART2_UART_Init();
   MX_ADC1_Init();
   MX_ADC2_Init();
@@ -222,6 +229,7 @@ int main(void) {
   /* USER CODE BEGIN RTOS_MUTEX */
   Serial_Init();
   AppState_Init();
+  AppConfig_Init();
   /* USER CODE END RTOS_MUTEX */
 
   /* USER CODE BEGIN RTOS_SEMAPHORES */
@@ -399,7 +407,7 @@ static void MX_ADC1_Init(void) {
    */
   sConfig.Channel = ADC_CHANNEL_6;
   sConfig.Rank = ADC_REGULAR_RANK_1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_2CYCLES_5;
+  sConfig.SamplingTime = ADC_SAMPLETIME_92CYCLES_5;
   sConfig.SingleDiff = ADC_SINGLE_ENDED;
   sConfig.OffsetNumber = ADC_OFFSET_NONE;
   sConfig.Offset = 0;
@@ -461,7 +469,7 @@ static void MX_ADC2_Init(void) {
    */
   sConfig.Channel = ADC_CHANNEL_5;
   sConfig.Rank = ADC_REGULAR_RANK_1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_2CYCLES_5;
+  sConfig.SamplingTime = ADC_SAMPLETIME_92CYCLES_5;
   sConfig.SingleDiff = ADC_SINGLE_ENDED;
   sConfig.OffsetNumber = ADC_OFFSET_NONE;
   sConfig.Offset = 0;

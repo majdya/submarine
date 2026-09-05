@@ -1,4 +1,5 @@
 #include "task_monitor.h"
+#include "app_config.h"
 #include "app_event.h"
 #include "app_state.h"
 #include "cmsis_os2.h"
@@ -7,13 +8,12 @@
 #include "rtc_ds1307.h"
 #include "sensors_adc.h"
 
-/* Placeholder thresholds - not from a real spec yet, just enough to prove
-   the event path end-to-end. Revisit once real limits are known. */
-#define BATTERY_LOW_RAW_THRESHOLD 200u /* out of 4095, i.e. ~160mV - deliberately low so it's easy to test */
-
 void Task_Monitor(void *argument) {
   (void)argument;
   for (;;) {
+    AppConfig_t cfg;
+    AppConfig_Get(&cfg);
+
     AppState_t readings = {0};
 
     ADC1_ReadLightTemp(&readings.light_raw, &readings.temp_raw);
@@ -35,10 +35,10 @@ void Task_Monitor(void *argument) {
     readings.last_monitor_tick = osKernelGetTickCount();
     AppState_SetSensorReadings(&readings);
 
-    if (readings.battery_raw < BATTERY_LOW_RAW_THRESHOLD) {
+    if (readings.battery_raw < cfg.battery_low_threshold_raw) {
       AppEvent_Post(EVENT_SENSOR_THRESHOLD, readings.battery_raw);
     }
 
-    osDelay(1000);
+    osDelay(cfg.monitor_period_ms);
   }
 }
