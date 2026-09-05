@@ -53,11 +53,19 @@
 ENTRY(Reset_Handler)
 
 /* Specify the memory areas */
+/* The last 2K page of flash (0x080FF800-0x080FFFFF) is deliberately
+   excluded from the FLASH region below and reserved for AppConfig's
+   flash-persisted storage (see Core/Src/app/flash_config_store.c,
+   CONFIG_FLASH_ADDR) - shrinking LENGTH here means the linker will never
+   place .text/.rodata/.data there and will instead fail the build with a
+   clear "region FLASH overflowed" error if the application ever grows
+   large enough to collide with it, rather than silently corrupting
+   whichever is written second. */
 MEMORY
 {
 RAM (xrw)      : ORIGIN = 0x20000000, LENGTH = 96K
 RAM2 (xrw)      : ORIGIN = 0x10000000, LENGTH = 32K
-FLASH (rx)      : ORIGIN = 0x8000000, LENGTH = 1024K
+FLASH (rx)      : ORIGIN = 0x8000000, LENGTH = 1022K
 }
 
 /* Highest address of the user mode stack */

@@ -19,3 +19,16 @@ void Serial_Print(const char *msg) {
     osMutexRelease(s_uart_mutex);
   }
 }
+
+void Serial_Write(const uint8_t *data, size_t len) {
+  if (!data || len == 0) {
+    return;
+  }
+  if (s_uart_mutex != NULL) {
+    osMutexAcquire(s_uart_mutex, osWaitForever);
+  }
+  HAL_UART_Transmit(&huart2, (uint8_t *)data, (uint16_t)len, HAL_MAX_DELAY);
+  if (s_uart_mutex != NULL) {
+    osMutexRelease(s_uart_mutex);
+  }
+}

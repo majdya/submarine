@@ -53,7 +53,13 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/app/rtc_ds1307.c
     Core/Src/app/sdcard.c
     Core/Src/app/peripheral_selftest.c
+    Core/Src/app/tlv.c
+    Core/Src/app/comm_frame.c
+    Core/Src/app/flash_config_store.c
     Core/Src/app/app_config.c
+    Core/Src/app/app_command.c
+    Core/Src/app/log_query.c
+    Core/Src/app/uart_rx.c
     Core/Src/app/app_state.c
     Core/Src/app/app_event.c
     Core/Src/app/app_log.c
@@ -63,6 +69,8 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/app/tasks/task_event.c
     Core/Src/app/tasks/task_log.c
     Core/Src/app/tasks/task_comm.c
+    Core/Src/app/tasks/task_comm_rx.c
+    Core/Src/app/tasks/task_keepalive.c
     Core/Src/app/tasks/task_watchdog.c
     Middlewares/FatFs/src/ff.c
     Middlewares/FatFs/src/diskio.c

@@ -52,3 +52,16 @@ uint8_t AppState_IsHealthy(void) {
   osMutexRelease(s_state_mutex);
   return healthy;
 }
+
+const char *AppMode_Name(AppMode_t mode) {
+  switch (mode) {
+    case APP_MODE_NORMAL:
+      return "NORMAL";
+    case APP_MODE_WARNING:
+      return "WARNING";
+    case APP_MODE_ERROR:
+      return "ERROR";
+    default:
+      return "UNKNOWN";
+  }
+}

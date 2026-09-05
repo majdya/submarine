@@ -20,6 +20,6 @@ void AppLog_Post(const char *text) {
   osMessageQueuePut(s_log_queue, &msg, 0, 0);
 }
 
-osStatus_t AppLog_Wait(AppLogMsg_t *out) {
-  return osMessageQueueGet(s_log_queue, out, NULL, osWaitForever);
+osStatus_t AppLog_Wait(AppLogMsg_t *out, uint32_t timeout_ms) {
+  return osMessageQueueGet(s_log_queue, out, NULL, timeout_ms);
 }
