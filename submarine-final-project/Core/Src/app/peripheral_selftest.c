@@ -57,13 +57,22 @@ static void Test_Buttons(void) {
   }
 }
 
-static void Test_BuzzerRGB(void) {
+static void Test_Buzzer(void) {
   Buzzer_SetDuty(400);
-  RGB_SetDuty(999, 0, 0);
-  HAL_Delay(80);
+  // RGB_SetDuty(999, 0, 0);
+  HAL_Delay(500);
   Buzzer_SetDuty(0);
+  // RGB_SetDuty(0, 0, 0);
+  Print("[BUZZER] chirp + red pulse commanded (TIM3 CH1-4)\r\n");
+}
+
+static void Test_RGB(void) {
+  // Buzzer_SetDuty(400);
+  RGB_SetDuty(999, 0, 0);
+  HAL_Delay(500);
+  // Buzzer_SetDuty(0);
   RGB_SetDuty(0, 0, 0);
-  Print("[BUZZER/RGB] chirp + red pulse commanded (TIM3 CH1-4)\r\n");
+  Print("[RGB] chirp + red pulse commanded (TIM3 CH1-4)\r\n");
 }
 
 static void Test_DHT11(void) {
@@ -113,11 +122,11 @@ static void Test_SDCard(void) {
   int len;
   if (st == HAL_OK) {
     len = snprintf(msg, sizeof(msg),
-                   "[SD/SPI1] raw byte exchange OK, rx=0x%02X (not a real SD "
+                   "[SD/SPI3] raw byte exchange OK, rx=0x%02X (not a real SD "
                    "init yet)\r\n",
                    rx);
   } else {
-    len = snprintf(msg, sizeof(msg), "[SD/SPI1] SPI error status=%d\r\n",
+    len = snprintf(msg, sizeof(msg), "[SD/SPI3] SPI error status=%d\r\n",
                    (int)st);
   }
   if (len > 0) {
@@ -130,7 +139,8 @@ void RunPeripheralSelfTest(void) {
   Test_ADC();
   Test_LEDs();
   Test_Buttons();
-  // Test_BuzzerRGB();
+  // Test_Buzzer();
+  Test_RGB();
   Test_DHT11();
   Test_RTC();
   Test_SDCard();

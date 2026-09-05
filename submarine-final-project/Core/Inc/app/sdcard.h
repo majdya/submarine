@@ -7,9 +7,9 @@
 extern "C" {
 #endif
 
-/* Raw single-byte SPI1 exchange with CS (PB6) asserted - proves
+/* Raw single-byte SPI3 exchange with CS (PD2) asserted - proves
    clocking/wiring only, NOT a real SD init sequence. See note in
-   sdcard.c about SPI1's current clock being too fast for real SD init. */
+   sdcard.c about SPI3's current clock being too fast for real SD init. */
 HAL_StatusTypeDef SD_RawByteExchange(uint8_t tx, uint8_t *rx);
 
 #ifdef __cplusplus

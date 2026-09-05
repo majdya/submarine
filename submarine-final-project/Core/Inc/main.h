@@ -54,7 +54,7 @@ extern ADC_HandleTypeDef hadc1;
 extern ADC_HandleTypeDef hadc2;
 extern I2C_HandleTypeDef hi2c3;
 extern IWDG_HandleTypeDef hiwdg;
-extern SPI_HandleTypeDef hspi1;
+extern SPI_HandleTypeDef hspi3;
 extern TIM_HandleTypeDef htim3;
 extern UART_HandleTypeDef huart2;
 
@@ -78,8 +78,8 @@ void Error_Handler(void);
 #define VCP_from_PC_GPIO_Port GPIOA
 #define ADC_TEMP_Pin GPIO_PIN_4
 #define ADC_TEMP_GPIO_Port GPIOA
-#define SD_card_Pin GPIO_PIN_5
-#define SD_card_GPIO_Port GPIOA
+#define SD_CS_Pin GPIO_PIN_2
+#define SD_CS_GPIO_Port GPIOD
 #define LED1_Pin GPIO_PIN_5
 #define LED1_GPIO_Port GPIOC
 #define Humidity_ADC_Pin GPIO_PIN_0

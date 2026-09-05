@@ -51,7 +51,7 @@ I2C_HandleTypeDef hi2c3;
 
 IWDG_HandleTypeDef hiwdg;
 
-SPI_HandleTypeDef hspi1;
+SPI_HandleTypeDef hspi3;
 
 TIM_HandleTypeDef htim3;
 
@@ -78,7 +78,7 @@ static void MX_ADC1_Init(void);
 static void MX_ADC2_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_I2C3_Init(void);
-static void MX_SPI1_Init(void);
+static void MX_SPI3_Init(void);
 void StartDefaultTask(void *argument);
 
 /* USER CODE BEGIN PFP */
@@ -119,7 +119,7 @@ int main(void) {
   MX_ADC2_Init();
   MX_TIM3_Init();
   MX_I2C3_Init();
-  MX_SPI1_Init();
+  MX_SPI3_Init();
 
   /* USER CODE BEGIN 2 */
   // 3. PRINT USING THE PRE-SAVED CLEAN_CSR VALUE
@@ -142,12 +142,13 @@ int main(void) {
   HAL_IWDG_Refresh(&hiwdg);
 
   /* NOTE: previously this block manually re-initialized PA5 as a plain GPIO
-     output for an "alive" blink. PA5 is now SPI1_SCK (alternate function,
-     used by the SD card) - that manual HAL_GPIO_Init() ran AFTER
-     MX_SPI1_Init() and silently overwrote SPI1's SCK pin config back to
-     plain GPIO, breaking SPI1. Removed. LED1 (PC5) is already a clean,
-     conflict-free GPIO output configured by MX_GPIO_Init() - use it for the
-     alive indicator instead (see the toggle in StartDefaultTask). */
+     output for an "alive" blink, which used to collide with SPI1_SCK on
+     that same pin. Removed. LED1 (PC5) is already a clean, conflict-free
+     GPIO output configured by MX_GPIO_Init() - use it for the alive
+     indicator instead (see the toggle in StartDefaultTask). SD card SPI
+     traffic has since moved off PA5/6/7/PB6 entirely (onto SPI3 /
+     PC10-12 + PD2 CS) because those Arduino-header pins (D13/D12/D11/D10)
+     are physically shared with the sensor shield's RGB LED. */
 
   HAL_IWDG_Refresh(&hiwdg);
   {
@@ -475,40 +476,45 @@ static void MX_IWDG_Init(void) {
 }
 
 /**
- * @brief SPI1 Initialization Function
+ * @brief SPI3 Initialization Function
  * @param None
  * @retval None
+ *
+ * Moved here from SPI1 (PA5/6/7 + PB6 CS): those pins are the Nucleo
+ * Arduino header's D13/D12/D11/D10, which are physically shared with the
+ * sensor shield's RGB LED. SPI3 (PC10/11/12, Morpho-only pins) plus a
+ * manual CS on PD2 (also Morpho-only) has no such overlap.
  */
-static void MX_SPI1_Init(void) {
+static void MX_SPI3_Init(void) {
 
-  /* USER CODE BEGIN SPI1_Init 0 */
+  /* USER CODE BEGIN SPI3_Init 0 */
 
-  /* USER CODE END SPI1_Init 0 */
+  /* USER CODE END SPI3_Init 0 */
 
-  /* USER CODE BEGIN SPI1_Init 1 */
+  /* USER CODE BEGIN SPI3_Init 1 */
 
-  /* USER CODE END SPI1_Init 1 */
-  /* SPI1 parameter configuration*/
-  hspi1.Instance = SPI1;
-  hspi1.Init.Mode = SPI_MODE_MASTER;
-  hspi1.Init.Direction = SPI_DIRECTION_2LINES;
-  hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
-  hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
-  hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
-  hspi1.Init.NSS = SPI_NSS_SOFT;
-  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
-  hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
-  hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
-  hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
-  hspi1.Init.CRCPolynomial = 7;
-  hspi1.Init.CRCLength = SPI_CRC_LENGTH_DATASIZE;
-  hspi1.Init.NSSPMode = SPI_NSS_PULSE_ENABLE;
-  if (HAL_SPI_Init(&hspi1) != HAL_OK) {
+  /* USER CODE END SPI3_Init 1 */
+  /* SPI3 parameter configuration*/
+  hspi3.Instance = SPI3;
+  hspi3.Init.Mode = SPI_MODE_MASTER;
+  hspi3.Init.Direction = SPI_DIRECTION_2LINES;
+  hspi3.Init.DataSize = SPI_DATASIZE_8BIT;
+  hspi3.Init.CLKPolarity = SPI_POLARITY_LOW;
+  hspi3.Init.CLKPhase = SPI_PHASE_1EDGE;
+  hspi3.Init.NSS = SPI_NSS_SOFT;
+  hspi3.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+  hspi3.Init.FirstBit = SPI_FIRSTBIT_MSB;
+  hspi3.Init.TIMode = SPI_TIMODE_DISABLE;
+  hspi3.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+  hspi3.Init.CRCPolynomial = 7;
+  hspi3.Init.CRCLength = SPI_CRC_LENGTH_DATASIZE;
+  hspi3.Init.NSSPMode = SPI_NSS_PULSE_ENABLE;
+  if (HAL_SPI_Init(&hspi3) != HAL_OK) {
     Error_Handler();
   }
-  /* USER CODE BEGIN SPI1_Init 2 */
+  /* USER CODE BEGIN SPI3_Init 2 */
 
-  /* USER CODE END SPI1_Init 2 */
+  /* USER CODE END SPI3_Init 2 */
 }
 
 /**
@@ -611,12 +617,16 @@ static void MX_GPIO_Init(void) {
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
+  __HAL_RCC_GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, LED2_Pin | GPIO_PIN_6, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOB, LED2_Pin, GPIO_PIN_SET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(SD_CS_GPIO_Port, SD_CS_Pin, GPIO_PIN_SET); /* SD SPI3 CS, idle deselected */
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET);
@@ -628,12 +638,19 @@ static void MX_GPIO_Init(void) {
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LED1_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : LED2_Pin PB6 */
-  GPIO_InitStruct.Pin = LED2_Pin | GPIO_PIN_6;
+  /*Configure GPIO pin : LED2_Pin */
+  GPIO_InitStruct.Pin = LED2_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : SD_CS_Pin (SPI3 manual CS) */
+  GPIO_InitStruct.Pin = SD_CS_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(SD_CS_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : SILENCE_Pin */
   GPIO_InitStruct.Pin = SILENCE_Pin;
