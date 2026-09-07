@@ -21,6 +21,7 @@
 #include "stm32l4xx_it.h"
 #include "app_event.h"
 #include "main.h"
+#include "uart_rx.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
@@ -123,18 +124,35 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
      ~49-day wraparound correctly without special-casing it. */
   static uint32_t last_objdetect_tick = 0;
   static uint32_t last_silence_tick = 0;
+  /* Button 2 (D3/PB3) stands in for a real distance/IR sensor (see
+     hardware.md S7 - no such sensor was available) as a manual
+     detected/cleared TOGGLE, since the spec's Object Detection module
+     needs both a "detected" and a "cleared" event, not just one signal
+     re-fired on every press. */
+  static uint8_t object_present = 0;
+
   uint32_t now = HAL_GetTick();
 
   if (GPIO_Pin == GPIO_PIN_3) {
     if ((uint32_t)(now - last_objdetect_tick) >= BUTTON_DEBOUNCE_MS) {
       last_objdetect_tick = now;
-      AppEvent_Post(EVENT_OBJECT_DETECTED, 0);
+      object_present = !object_present;
+      AppEvent_Post(object_present ? EVENT_OBJECT_DETECTED : EVENT_OBJECT_CLEARED, 0);
     }
   } else if (GPIO_Pin == SILENCE_Pin) {
     if ((uint32_t)(now - last_silence_tick) >= BUTTON_DEBOUNCE_MS) {
       last_silence_tick = now;
       AppEvent_Post(EVENT_SILENCE_PRESSED, 0);
     }
+  }
+}
+
+/* First-ever UART RX in this project (see uart_rx.c/task_comm_rx.c) -
+   HAL calls this once the single byte armed by the last
+   HAL_UART_Receive_IT (or UartRx_Start's first call) has arrived. */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+  if (huart->Instance == USART2) {
+    UartRx_ByteReceivedFromISR();
   }
 }
 /* USER CODE END 0 */

@@ -32,8 +32,12 @@
 #include "dwt_delay.h"
 #include "indicators.h"
 #include "peripheral_selftest.h"
+#include "log_query.h"
 #include "task_comm.h"
+#include "task_comm_rx.h"
 #include "task_event.h"
+#include "task_keepalive.h"
+#include "uart_rx.h"
 #include "task_log.h"
 #include "task_monitor.h"
 #include "task_watchdog.h"
@@ -104,6 +108,20 @@ const osThreadAttr_t logTask_attributes = {
 osThreadId_t commTaskHandle;
 const osThreadAttr_t commTask_attributes = {
     .name = "CommTask",
+    .stack_size = 384 * 4,
+    .priority = (osPriority_t)osPriorityAboveNormal,
+};
+
+osThreadId_t keepAliveTaskHandle;
+const osThreadAttr_t keepAliveTask_attributes = {
+    .name = "KeepAliveTask",
+    .stack_size = 320 * 4,
+    .priority = (osPriority_t)osPriorityAboveNormal,
+};
+
+osThreadId_t commRxTaskHandle;
+const osThreadAttr_t commRxTask_attributes = {
+    .name = "CommRxTask",
     .stack_size = 384 * 4,
     .priority = (osPriority_t)osPriorityAboveNormal,
 };
@@ -235,7 +253,13 @@ int main(void) {
   /* USER CODE END RTOS_MUTEX */
 
   /* USER CODE BEGIN RTOS_SEMAPHORES */
-  /* add semaphores, ... */
+  UartRx_Init();
+  UartRx_Start(); /* arms the first single-byte HAL_UART_Receive_IT -
+                      safe before osKernelStart(): the semaphore it
+                      signals already exists, and FreeRTOS allows giving
+                      one before the scheduler is running (the count is
+                      just there waiting for Task_CommRx to acquire it
+                      once it starts). */
   /* USER CODE END RTOS_SEMAPHORES */
 
   /* USER CODE BEGIN RTOS_TIMERS */
@@ -246,6 +270,7 @@ int main(void) {
   AppEvent_QueueCreate();
   AppLog_QueueCreate();
   AppComm_QueueCreate();
+  LogQuery_QueueCreate();
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
@@ -257,6 +282,9 @@ int main(void) {
   eventTaskHandle = osThreadNew(Task_Event, NULL, &eventTask_attributes);
   logTaskHandle = osThreadNew(Task_Log, NULL, &logTask_attributes);
   commTaskHandle = osThreadNew(Task_Comm, NULL, &commTask_attributes);
+  keepAliveTaskHandle =
+      osThreadNew(Task_KeepAlive, NULL, &keepAliveTask_attributes);
+  commRxTaskHandle = osThreadNew(Task_CommRx, NULL, &commRxTask_attributes);
   watchdogTaskHandle =
       osThreadNew(Task_Watchdog, NULL, &watchdogTask_attributes);
   /* USER CODE END RTOS_THREADS */
@@ -678,7 +706,14 @@ static void MX_USART2_UART_Init(void) {
     Error_Handler();
   }
   /* USER CODE BEGIN USART2_Init 2 */
-
+  /* USART2's NVIC interrupt was never actually enabled before - the
+     handler existed in stm32l4xx_it.c but nothing unmasked it, so it
+     could never fire. Priority 5 matches configMAX_SYSCALL_INTERRUPT_
+     PRIORITY (FreeRTOSConfig.h) - the same priority already used for
+     EXTI3_IRQn/EXTI15_10_IRQn below, safe for calling FreeRTOS ISR-safe
+     APIs (UartRx_ByteReceivedFromISR -> osSemaphoreRelease). */
+  HAL_NVIC_SetPriority(USART2_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(USART2_IRQn);
   /* USER CODE END USART2_Init 2 */
 }
 

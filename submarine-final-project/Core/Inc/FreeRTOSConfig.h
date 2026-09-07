@@ -71,7 +71,14 @@ extern uint32_t SystemCoreClock;
 #define configTICK_RATE_HZ ((TickType_t)1000)
 #define configMAX_PRIORITIES (56)
 #define configMINIMAL_STACK_SIZE ((uint16_t)128)
-#define configTOTAL_HEAP_SIZE ((size_t)20480)
+/* Bumped 20480 -> 32768: Task #7 (UART RX + command dispatch + a
+   priority-queued app_comm) added a new task (CommRxTask), a new
+   semaphore, and grew AppComm's single 8-slot queue into three 8-slot
+   queues of a much larger message struct (128-byte TLV payload vs the
+   old 80-byte text field) - comfortably still fits in this device's 96KB
+   SRAM1 (+32KB SRAM2, unused by the heap) alongside everything else
+   statically allocated. */
+#define configTOTAL_HEAP_SIZE ((size_t)32768)
 #define configMAX_TASK_NAME_LEN (16)
 #define configUSE_TRACE_FACILITY 1
 #define configUSE_16_BIT_TICKS 0

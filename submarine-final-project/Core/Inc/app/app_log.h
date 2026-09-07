@@ -22,8 +22,11 @@ void AppLog_QueueCreate(void);
    ever stalling the caller. Truncates to APP_LOG_MSG_LEN-1 chars. */
 void AppLog_Post(const char *text);
 
-/* Log task only: blocks until a message arrives. */
-osStatus_t AppLog_Wait(AppLogMsg_t *out);
+/* Log task only: blocks up to timeout_ms (or osWaitForever) for a
+   message - a finite timeout lets Task_Log also poll LogQuery_Poll()
+   in between, since CMSIS-RTOS2 has no "wait on either of two queues"
+   primitive. */
+osStatus_t AppLog_Wait(AppLogMsg_t *out, uint32_t timeout_ms);
 
 #ifdef __cplusplus
 }
