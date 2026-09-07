@@ -1,0 +1,663 @@
+<title>Submarine System Schematics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #eef1f0;
+    --surface: #ffffff;
+    --surface-2: #e4e9e8;
+    --text: #16232b;
+    --text-dim: #526673;
+    --border: #c3d0d4;
+    --accent: #0f6e8c;      /* firmware / primary */
+    --accent-ink: #ffffff;
+    --app: #4a5b8c;         /* PC app group */
+    --oop: #2f7d5c;         /* OOP + dashboard group */
+    --warn: #c9622a;        /* status: disabled / watch */
+    --grid-line: rgba(15, 110, 140, 0.07);
+    --shadow: 0 1px 2px rgba(22, 35, 43, 0.06), 0 6px 20px rgba(22, 35, 43, 0.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #071a26;
+      --surface: #0e2736;
+      --surface-2: #123044;
+      --text: #dce8ea;
+      --text-dim: #7fa0ab;
+      --border: #1c3a4a;
+      --accent: #35c3d6;
+      --accent-ink: #04222a;
+      --app: #97a9e8;
+      --oop: #5fd6ab;
+      --warn: #eaa262;
+      --grid-line: rgba(53, 195, 214, 0.07);
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 10px 26px rgba(0, 0, 0, 0.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #071a26;
+    --surface: #0e2736;
+    --surface-2: #123044;
+    --text: #dce8ea;
+    --text-dim: #7fa0ab;
+    --border: #1c3a4a;
+    --accent: #35c3d6;
+    --accent-ink: #04222a;
+    --app: #97a9e8;
+    --oop: #5fd6ab;
+    --warn: #eaa262;
+    --grid-line: rgba(53, 195, 214, 0.07);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 10px 26px rgba(0, 0, 0, 0.35);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background:
+      repeating-linear-gradient(0deg, var(--grid-line) 0 1px, transparent 1px 32px),
+      repeating-linear-gradient(90deg, var(--grid-line) 0 1px, transparent 1px 32px),
+      var(--bg);
+    color: var(--text);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    line-height: 1.55;
+  }
+  h1, h2, h3 { text-wrap: balance; font-family: "Big Shoulders Display", "Arial Narrow", sans-serif; }
+  code, .mono { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace; }
+  a { color: var(--accent); }
+
+  /* ---------- Title block ---------- */
+  .titleblock {
+    border-bottom: 3px solid var(--text);
+    background: var(--surface);
+  }
+  .titleblock-inner {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 28px clamp(16px, 4vw, 40px) 20px;
+  }
+  .titleblock-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  .titleblock h1 {
+    margin: 0;
+    font-weight: 800;
+    font-size: clamp(2rem, 5vw, 3.1rem);
+    letter-spacing: 0.01em;
+    line-height: 0.95;
+    text-transform: uppercase;
+  }
+  .titleblock .spec {
+    margin: 6px 0 0;
+    color: var(--text-dim);
+    font-size: 0.95rem;
+  }
+  .titleblock .spec code { color: var(--accent); }
+  .meta-strip {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: max-content;
+    gap: 28px;
+    padding: 10px 0 0;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    overflow-x: auto;
+  }
+  .meta-strip b { display: block; color: var(--text); font-size: 0.85rem; letter-spacing: 0; margin-top: 2px; }
+  .meta-strip span { white-space: nowrap; }
+
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 18px; }
+  .legend-item { display: flex; align-items: center; gap: 7px; font-size: 0.78rem; color: var(--text-dim); }
+  .swatch { width: 11px; height: 11px; border-radius: 2px; flex: none; }
+
+  /* ---------- Layout ---------- */
+  .layout {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 32px clamp(16px, 4vw, 40px) 80px;
+    display: grid;
+    grid-template-columns: 230px 1fr;
+    gap: 40px;
+    align-items: start;
+  }
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: 1fr; }
+    nav.index { position: static !important; order: 2; }
+  }
+
+  nav.index {
+    position: sticky;
+    top: 20px;
+    align-self: start;
+    font-size: 0.85rem;
+  }
+  nav.index h2 {
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin: 18px 0 8px;
+    font-family: "IBM Plex Mono", monospace;
+    font-weight: 500;
+  }
+  nav.index h2:first-child { margin-top: 0; }
+  nav.index ol {
+    list-style: none;
+    margin: 0 0 4px;
+    padding: 0;
+    border-left: 2px solid var(--border);
+  }
+  nav.index li a {
+    display: block;
+    padding: 5px 0 5px 14px;
+    color: var(--text-dim);
+    text-decoration: none;
+    border-left: 2px solid transparent;
+    margin-left: -2px;
+    transition: color .15s, border-color .15s;
+  }
+  nav.index li a .num { font-family: "IBM Plex Mono", monospace; opacity: .6; margin-right: 6px; }
+  nav.index li a:hover { color: var(--text); }
+  nav.index li a.active { color: var(--accent); border-left-color: var(--accent); font-weight: 500; }
+
+  main { min-width: 0; }
+  .group-heading {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin: 48px 0 18px;
+  }
+  .group-heading:first-child { margin-top: 0; }
+  .group-heading h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+  .group-heading .rule { flex: 1; height: 1px; background: var(--border); }
+  .group-heading .count { font-family: "IBM Plex Mono", monospace; font-size: 0.78rem; color: var(--text-dim); }
+
+  .sheet {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    box-shadow: var(--shadow);
+    margin-bottom: 22px;
+    overflow: hidden;
+    scroll-margin-top: 18px;
+  }
+  .sheet-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-2);
+    flex-wrap: wrap;
+  }
+  .sheet-num {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+  .tag {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.66rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 3px;
+    color: var(--accent-ink);
+    white-space: nowrap;
+  }
+  .tag.fw { background: var(--accent); }
+  .tag.app { background: var(--app); }
+  .tag.oop { background: var(--oop); }
+  .tag.status { background: var(--warn); }
+  .sheet-head h3 {
+    margin: 0;
+    font-size: 1.2rem;
+    font-weight: 700;
+    flex: 1;
+    min-width: 160px;
+  }
+  .sheet-body { padding: 18px 20px 20px; }
+  .sheet-body p.desc {
+    margin: 0 0 16px;
+    max-width: 68ch;
+    color: var(--text-dim);
+  }
+  .status-note {
+    margin: 0 0 16px;
+    padding: 10px 14px;
+    border-left: 3px solid var(--warn);
+    background: color-mix(in srgb, var(--warn) 12%, var(--surface));
+    font-size: 0.88rem;
+  }
+  .diagram-frame {
+    border: 1px dashed var(--border);
+    border-radius: 3px;
+    padding: 14px;
+    overflow-x: auto;
+    background: color-mix(in srgb, var(--accent) 3%, var(--surface));
+  }
+  .diagram-frame pre.mermaid { margin: 0; }
+  .source-line {
+    margin: 14px 0 0;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    padding-top: 10px;
+    border-top: 1px dotted var(--border);
+  }
+  .source-line code {
+    background: var(--surface-2);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 0.76rem;
+  }
+
+  footer {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 clamp(16px, 4vw, 40px) 60px;
+    color: var(--text-dim);
+    font-size: 0.8rem;
+  }
+  footer a { color: var(--text-dim); }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .sheet { animation: rise .4s ease backwards; }
+  }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+</style>
+
+<div class="titleblock">
+  <div class="titleblock-inner">
+    <div class="titleblock-top">
+      <div>
+        <h1>Submarine Monitoring System</h1>
+        <p class="spec">Component Flowcharts — spec <code>SW-FD-LNC-001</code></p>
+      </div>
+    </div>
+    <div class="meta-strip">
+      <span>Sheets<b>16</b></span>
+      <span>Firmware target<b>Nucleo-L476RG</b></span>
+      <span>PC app<b>C++17 / CMake</b></span>
+      <span>Protocol<b>TLV over UART</b></span>
+      <span>Status<b>2 in progress</b></span>
+    </div>
+    <div class="legend">
+      <span class="legend-item"><span class="swatch" style="background:var(--accent)"></span>Firmware (LNC)</span>
+      <span class="legend-item"><span class="swatch" style="background:var(--app)"></span>Central Computer (PC app)</span>
+      <span class="legend-item"><span class="swatch" style="background:var(--oop)"></span>OOP part &amp; dashboard</span>
+      <span class="legend-item"><span class="swatch" style="background:var(--warn)"></span>Status flag</span>
+    </div>
+  </div>
+</div>
+
+<div class="layout">
+  <nav class="index" aria-label="Component index">
+    <h2>Firmware (LNC)</h2>
+    <ol>
+      <li><a href="#init"><span class="num">01</span>Init</a></li>
+      <li><a href="#configuration"><span class="num">02</span>Configuration</a></li>
+      <li><a href="#monitor"><span class="num">03</span>Monitor</a></li>
+      <li><a href="#object-detection"><span class="num">04</span>Object Detection</a></li>
+      <li><a href="#event"><span class="num">05</span>Event</a></li>
+      <li><a href="#log"><span class="num">06</span>Log &amp; Retrieval</a></li>
+      <li><a href="#communication"><span class="num">07</span>Communication</a></li>
+      <li><a href="#command-handling"><span class="num">08</span>Command Handling</a></li>
+      <li><a href="#keepalive"><span class="num">09</span>Keep-Alive</a></li>
+      <li><a href="#watchdog"><span class="num">10</span>Watchdog</a></li>
+    </ol>
+    <h2>Central Computer</h2>
+    <ol>
+      <li><a href="#app-communication"><span class="num">11</span>Communication</a></li>
+      <li><a href="#app-management-command"><span class="num">12</span>Management Command</a></li>
+      <li><a href="#app-log"><span class="num">13</span>Log</a></li>
+      <li><a href="#app-data-collection"><span class="num">14</span>Data Collection</a></li>
+    </ol>
+    <h2>OOP &amp; Dashboard</h2>
+    <ol>
+      <li><a href="#fleet-menu"><span class="num">15</span>Fleet &amp; Menu</a></li>
+      <li><a href="#web-dashboard"><span class="num">16</span>Web Dashboard</a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+    <div class="group-heading"><h2>Firmware — LNC</h2><div class="rule"></div><span class="count">10 sheets</span></div>
+
+    <section class="sheet" id="init">
+      <div class="sheet-head"><span class="sheet-num">SHEET 01/16</span><span class="tag fw">Firmware</span><h3>Init</h3></div>
+      <div class="sheet-body">
+        <p class="desc">Runs once at boot, before any other task starts. Reads the reset-cause register, syncs the clock, then hands off.</p>
+        <div class="diagram-frame"><pre class="mermaid">
+graph TD
+  A[Power-on / Reset] --> B{RCC_CSR shows IWDGRSTF?}
+  B -->|Yes| C[Note: recovered from a watchdog reset]
+  B -->|No| D[Normal boot]
+  C --> E[Request time sync from Central Computer over UART]
+  D --> E
+  E --> F[AppState_Init: system_healthy = 0]
+  F --> G[Start Monitor, Event, Log, Comm, CommRx, Keep-Alive, Watchdog tasks]
+        </pre></div>
+        <p class="source-line">Source: <code>StartInitTask</code> in <code>Core/Src/main.c</code>, <code>app_state.c</code></p>
+      </div>
+    </section>
+
+    <section class="sheet" id="configuration">
+      <div class="sheet-head"><span class="sheet-num">SHEET 02/16</span><span class="tag fw">Firmware</span><h3>Configuration</h3></div>
+      <div class="sheet-body">
+        <p class="desc">Owns the Normal/Warning limit table (temp, humidity, light, battery) that Monitor classifies readings against. Backed by the last flash page so limits survive a reset.</p>
+        <div class="diagram-frame"><pre class="mermaid">
+graph TD
+  A[Boot] --> B{Valid config in Flash?}
+  B -->|Yes, checksum OK| C[Load stored limits]
+  B -->|No / first boot| D[Load placeholder defaults]
+  C --> E[AppConfig ready]
+  D --> E
+  E --> F[Monitor reads limits every cycle]
+  G[SET_LIMITS command arrives] --> H["Update one PARAM's Normal/Warning bounds"]
+  H --> I[Persist to Flash]
+  I --> E
+        </pre></div>
+        <p class="source-line">Source: <code>app_config.c/.h</code>, <code>flash_config_store.c/.h</code></p>
+      </div>
+    </section>
+
+    <section class="sheet" id="monitor">
+      <div class="sheet-head"><span class="sheet-num">SHEET 03/16</span><span class="tag fw">Firmware</span><h3>Monitor</h3></div>
+      <div class="sheet-body">
+        <p class="desc">Runs on a periodic timer, reads all four sensor values, classifies each against Configuration's limits, and only bothers Event when the overall mode actually changes.</p>
+        <div class="diagram-frame"><pre class="mermaid">
+graph TD
+  A[Timer tick, ~5s] --> B["Read light + temp (ADC), battery (ADC), humidity+temp (DHT11)"]
+  B --> C[Classify each value: Normal / Warning / Error]
+  C --> D[Overall mode = worst of the four]
+  D --> E[Always: push reading to Log]
+  D --> F{Mode changed since last cycle?}
+  F -->|Yes| G[Post mode-change event to Event]
+  F -->|No| H[No event]
+        </pre></div>
+        <p class="source-line">Source: <code>tasks/task_monitor.c</code>, <code>sensors_adc.c</code>, <code>dht11.c</code></p>
+      </div>
+    </section>
+
+    <section class="sheet" id="object-detection">
+      <div class="sheet-head"><span class="sheet-num">SHEET 04/16</span><span class="tag fw">Firmware</span><h3>Object Detection &amp; Silence Button</h3></div>
+      <div class="sheet-body">
+        <p class="desc">Both are EXTI (interrupt) driven, not a polling task — the ISR posts straight to the Event queue for the lowest possible latency.</p>
+        <div class="diagram-frame"><pre class="mermaid">
+graph TD
+  A[GPIO EXTI interrupt fires] --> B{Which pin?}
+  B -->|Object-detect pin| C{Debounced state}
+  C -->|Object now present| D[Post EVENT_OBJECT_DETECTED]
+  C -->|Object now absent| E[Post EVENT_OBJECT_CLEARED]
+  B -->|Silence button pin| F[Post EVENT_SILENCE_PRESSED]
+  D --> G[Event task handles it]
+  E --> G
+  F --> G
+        </pre></div>
+        <p class="source-line">Source: <code>stm32l4xx_it.c</code> (EXTI callback), <code>buttons.c/.h</code></p>
+      </div>
+    </section>
+
+    <section class="sheet" id="event">
+      <div class="sheet-head"><span class="sheet-num">SHEET 05/16</span><span class="tag fw">Firmware</span><h3>Event</h3></div>
+      <div class="sheet-body">
+        <p class="desc">The single consumer of the event queue — fed by Monitor (mode changes), the EXTI ISR (object/silence), Configuration, and Init. Owns the RGB LED and buzzer exclusively.</p>
+        <div class="diagram-frame"><pre class="mermaid">
+graph TD
+  A[Event arrives on queue] --> B["Timestamp it (RTC)"]
+  B --> C{Event type}
+  C -->|Mode change| D[Set RGB: green/yellow/red]
+  C -->|Object detected| E[Trigger alarm buzzer]
+  C -->|Silence pressed| F[Turn buzzer off]
+  C -->|Other| G[No indicator change]
+  D --> H[Write event line to SD log]
+  E --> H
+  F --> H
+  G --> H
+  H --> I{Event type is comms-relevant?}
+  I -->|Yes| J[Enqueue to Communication outbound queue]
+  I -->|No| K[Done]
+        </pre></div>
+        <p class="source-line">Source: <code>tasks/task_event.c</code>, <code>indicators.c/.h</code></p>
+      </div>
+    </section>
+
+    <section class="sheet" id="log">
+      <div class="sheet-head"><span class="sheet-num">SHEET 06/16</span><span class="tag fw">Firmware</span><h3>Log &amp; Retrieval</h3></div>
+      <div class="sheet-body">
+        <p class="desc">Writes both periodic Monitor readings and Event log lines to date-named files on the SD card, with 7-day rolling retention; also serves GET_DATA/GET_EVENTS retrieval requests from the same files.</p>
+        <div class="diagram-frame"><pre class="mermaid">
+graph TD
+  A[Log queue: Monitor reading or Event line] --> B["Open/append today's YYYYMMDD.TXT on SD"]
+  B --> C{New day since last write?}
+  C -->|Yes| D[Delete file older than 7 days, if any]
+  C -->|No| E[Continue]
+  D --> E
+  E --> F[Write formatted line]
+  G[GET_DATA / GET_EVENTS request] --> H["Look up requested date's file on SD"]
+  H --> I[Stream matching lines back to Communication]
+        </pre></div>
+        <p class="source-line">Source: <code>tasks/task_log.c</code>, <code>app_log.c/.h</code>, <code>log_query.c/.h</code>, <code>sdcard.c/.h</code></p>
+      </div>
+    </section>
+
+    <section class="sheet" id="communication">
+      <div class="sheet-head"><span class="sheet-num">SHEET 07/16</span><span class="tag fw">Firmware</span><h3>Communication</h3></div>
+      <div class="sheet-body">
+        <p class="desc">Two tasks either side of one TLV-framed UART link: CommRx parses inbound bytes and routes them; Comm drains a priority-ordered outbound queue.</p>
+        <div class="diagram-frame"><pre class="mermaid">
+graph TD
+  A[UART RX interrupt] --> B[Push byte to ring buffer]
+  B --> C["Task_CommRx: pop + TLV-decode a frame"]
+  C --> D{Frame type}
+  D -->|Management command| E[Hand off to Command Handling]
+  D -->|Retrieval instruction| F[Hand off to Log & Retrieval]
+  G["Task_Comm: outbound loop"] --> H{Any message queued?}
+  H -->|Keep-alive pending| I[Send it - highest priority]
+  H -->|Event pending| J[Send it - medium priority]
+  H -->|Data report pending| K[Send it - lowest priority]
+  I --> H
+  J --> H
+  K --> H
+        </pre></div>
+        <p class="source-line">Source: <code>tasks/task_comm.c</code>, <code>tasks/task_comm_rx.c</code>, <code>app_comm.c/.h</code>, <code>uart_rx.c/.h</code>, and the shared <code>tlv.c</code>/<code>comm_frame.c</code> — also compiled unmodified into the PC app</p>
+      </div>
+    </section>
+
+    <section class="sheet" id="command-handling">
+      <div class="sheet-head"><span class="sheet-num">SHEET 08/16</span><span class="tag fw">Firmware</span><h3>Command Handling</h3></div>
+      <div class="sheet-body">
+        <p class="desc">The inbound side of Communication: turns a decoded command frame into an actual action, then replies.</p>
+        <div class="diagram-frame"><pre class="mermaid">
+graph TD
+  A[Decoded command frame] --> B{Command tag}
+  B -->|SET_TIME| C[Write RTC]
+  B -->|GET_TIME| D[Read RTC]
+  B -->|SET_LIMITS + PARAM| E[Update Configuration, persist to Flash]
+  B -->|GET_DATA| F["Ask Log & Retrieval for a date's readings"]
+  B -->|GET_EVENTS| G["Ask Log & Retrieval for a date's events"]
+  C --> H[Send ACK/reply via Communication]
+  D --> H
+  E --> H
+  F --> H
+  G --> H
+        </pre></div>
+        <p class="source-line">Source: <code>app_command.c/.h</code></p>
+      </div>
+    </section>
+
+    <section class="sheet" id="keepalive">
+      <div class="sheet-head"><span class="sheet-num">SHEET 09/16</span><span class="tag fw">Firmware</span><h3>Keep-Alive</h3></div>
+      <div class="sheet-body">
+        <p class="desc">A simple periodic timer task — proves to the Central Computer that the LNC is alive even when nothing else is happening.</p>
+        <div class="diagram-frame"><pre class="mermaid">
+graph TD
+  A[Timer tick, ~6s] --> B[Read current mode + latest measurement]
+  B --> C[Timestamp it]
+  C --> D[Enqueue as highest-priority outbound message]
+  D --> E[Task_Comm sends it next]
+        </pre></div>
+        <p class="source-line">Source: <code>tasks/task_keepalive.c</code></p>
+      </div>
+    </section>
+
+    <section class="sheet" id="watchdog">
+      <div class="sheet-head"><span class="sheet-num">SHEET 10/16</span><span class="tag fw">Firmware</span><span class="tag status">Disabled</span><h3>Watchdog</h3></div>
+      <div class="sheet-body">
+        <p class="status-note">Currently disabled — <code>MX_IWDG_Init()</code> is commented out in <code>main.c</code>. Re-enabling it previously caused unwanted resets; root cause was traced to <code>AppState</code>'s health gate, but re-enabling is pending an explicit go-ahead.</p>
+        <div class="diagram-frame"><pre class="mermaid">
+graph TD
+  A[Task_Watchdog runs periodically] --> B{AppState.system_healthy?}
+  B -->|Yes| C[HAL_IWDG_Refresh]
+  B -->|No, e.g. Init not finished| D["Skip refresh, IWDG will reset the MCU"]
+  C --> E[Sleep until next cycle]
+  D --> E
+        </pre></div>
+        <p class="source-line">Source: <code>tasks/task_watchdog.c</code>, <code>app_state.c/.h</code>, <code>main.c</code> (IWDG init currently commented out)</p>
+      </div>
+    </section>
+
+    <div class="group-heading"><h2>Central Computer — PC App</h2><div class="rule"></div><span class="count">4 sheets</span></div>
+
+    <section class="sheet" id="app-communication">
+      <div class="sheet-head"><span class="sheet-num">SHEET 11/16</span><span class="tag app">PC App</span><h3>Communication</h3></div>
+      <div class="sheet-body">
+        <p class="desc">Mirrors the firmware's Communication module on the PC side — a reader thread over a real (or loopback) transport, decoding the same TLV frames.</p>
+        <div class="diagram-frame"><pre class="mermaid">
+graph TD
+  A["Reader thread: transport.readSome"] --> B[Feed bytes to FrameDecoder]
+  B --> C{Complete frame?}
+  C -->|No| A
+  C -->|Yes, reply to a pending command| D[Deliver to the waiting caller]
+  C -->|"Yes, unsolicited KEEPALIVE/EVENT"| E[Update LiveSnapshot + notify Log/DataCollection]
+  F["ManagementCommand::sendX"] --> G["Encode TLV frame, transport.write"]
+  G --> H[Block waiting for reply, with timeout]
+        </pre></div>
+        <p class="source-line">Source: <code>comm_link.h/.cpp</code>, <code>protocol_bridge.h/.cpp</code>, <code>transport/serial_transport.h/.cpp</code>, <code>transport/loopback_transport.h</code></p>
+      </div>
+    </section>
+
+    <section class="sheet" id="app-management-command">
+      <div class="sheet-head"><span class="sheet-num">SHEET 12/16</span><span class="tag app">PC App</span><h3>Management Command</h3></div>
+      <div class="sheet-body">
+        <p class="desc">The outward-facing API a caller (console <code>Menu</code>, or the dashboard) uses to actually talk to the LNC — one method per command, all going through Communication.</p>
+        <div class="diagram-frame"><pre class="mermaid">
+graph TD
+  A["Caller: e.g. setLimits, getTime, getData"] --> B[Build TLV command frame]
+  B --> C["CommLink sends it, waits for reply"]
+  C --> D{Reply / ACK received in time?}
+  D -->|Yes| E[Return parsed result to caller]
+  D -->|No, timeout| F["Return failure - hardware not responding"]
+        </pre></div>
+        <p class="source-line">Source: <code>management_command.h/.cpp</code></p>
+      </div>
+    </section>
+
+    <section class="sheet" id="app-log">
+      <div class="sheet-head"><span class="sheet-num">SHEET 13/16</span><span class="tag app">PC App</span><h3>Log</h3></div>
+      <div class="sheet-body">
+        <p class="desc">Persists everything received from the LNC (data + events) to local files, with the same day-based retention logic ported from the firmware.</p>
+        <div class="diagram-frame"><pre class="mermaid">
+graph TD
+  A["KEEPALIVE / EVENT / GET_DATA reply arrives"] --> B[Format as a log line]
+  B --> C["Append to today's date-named file"]
+  C --> D{Retention window exceeded?}
+  D -->|Yes| E["Remove file(s) past the retention cutoff"]
+  D -->|No| F[Done]
+        </pre></div>
+        <p class="source-line">Source: <code>log_module.h/.cpp</code></p>
+      </div>
+    </section>
+
+    <section class="sheet" id="app-data-collection">
+      <div class="sheet-head"><span class="sheet-num">SHEET 14/16</span><span class="tag app">PC App</span><h3>Data Collection &amp; Analysis</h3></div>
+      <div class="sheet-body">
+        <p class="desc">Keeps a structured record store (flat-file, documented stand-in for a real database) and answers simple report queries over it.</p>
+        <div class="diagram-frame"><pre class="mermaid">
+graph TD
+  A[New measurement / event received] --> B["DataStore: append structured record"]
+  B --> C[Flat CSV-style file on disk]
+  D[Caller asks for a report] --> E["DataCollection: read matching records"]
+  E --> F[Summarize / return breakdown]
+        </pre></div>
+        <p class="source-line">Source: <code>data_collection.h/.cpp</code>, <code>data_store.h/.cpp</code></p>
+      </div>
+    </section>
+
+    <div class="group-heading"><h2>OOP Part &amp; Web Dashboard</h2><div class="rule"></div><span class="count">2 sheets</span></div>
+
+    <section class="sheet" id="fleet-menu">
+      <div class="sheet-head"><span class="sheet-num">SHEET 15/16</span><span class="tag oop">OOP</span><h3>Fleet &amp; Menu</h3></div>
+      <div class="sheet-body">
+        <p class="desc">The 10-operation console menu — pure logic in <code>Menu</code>, no I/O — operating on <code>Fleet</code>'s owned submarines. Also the same object graph the web dashboard drives.</p>
+        <div class="diagram-frame"><pre class="mermaid">
+graph TD
+  A[Menu operation invoked] --> B{Which operation?}
+  B -->|Add| C["Fleet::addSubmarine, reject duplicate serial"]
+  B -->|"Search / Display"| D["Fleet::findBySerial"]
+  B -->|Assign mission| E["Submarine::assignMission, fails if already assigned"]
+  B -->|Update mission| F["Edit the live Mission object's fields"]
+  B -->|End mission| G[Move Mission to history, mark available]
+  B -->|Associate combat subs| H["CombatSubmarine::addParticipatingSubmarine"]
+  B -->|Send message| I[Resolve both serials, verify shared mission, deliver]
+  B -->|Display messages| J["Return that submarine's received messages"]
+        </pre></div>
+        <p class="source-line">Source: <code>menu.h/.cpp</code>, <code>fleet.h/.cpp</code>, <code>submarine.h/.cpp</code>, <code>research_submarine.h/.cpp</code>, <code>combat_submarine.h/.cpp</code>, <code>mission.h</code>, <code>message.h</code></p>
+      </div>
+    </section>
+
+    <section class="sheet" id="web-dashboard">
+      <div class="sheet-head"><span class="sheet-num">SHEET 16/16</span><span class="tag oop">Dashboard</span><h3>Web Dashboard</h3></div>
+      <div class="sheet-body">
+        <p class="desc">A hand-rolled HTTP server plus a thin JSON API layer, sharing the same live <code>Fleet</code> as the console via one mutex. Additive — the console menu is unchanged and remains the graded deliverable.</p>
+        <div class="diagram-frame"><pre class="mermaid">
+graph TD
+  A["Browser loads localhost:8080"] --> B[Serves embedded dashboard_html page]
+  B --> C["Page polls GET /api/state every 2s"]
+  C --> D["DashboardApi::stateJson, lock mutex, read Fleet, build JSON"]
+  E["Browser submits a form: add/assign/end/message"] --> F["POST to /api/... route"]
+  F --> G["HttpServer matches route incl. :serial path param"]
+  G --> H["DashboardApi method, lock mutex, mutate Fleet, return ok/error JSON"]
+  H --> C
+  I[Console handler running] -.->|shares g_fleetMutex| H
+        </pre></div>
+        <p class="source-line">Source: <code>http_server.h/.cpp</code>, <code>dashboard_api.h/.cpp</code>, <code>dashboard_html.h/.cpp</code>, wired up in <code>main.cpp</code></p>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<footer>
+  Generated from <code>docs/flowcharts/</code> in the project repository, branch <code>central-computer-oop-app</code>. One diagram per component, kept intentionally short — see each source file's own comments for full detail.
+</footer>
+
+<script>
+  (function () {
+    var links = Array.prototype.slice.call(document.querySelectorAll('nav.index a'));
+    var sections = links.map(function (a) { return document.querySelector(a.getAttribute('href')); });
+    function onScroll() {
+      var y = window.scrollY + 100;
+      var activeIndex = 0;
+      for (var i = 0; i < sections.length; i++) {
+        if (sections[i] && sections[i].offsetTop <= y) activeIndex = i;
+      }
+      links.forEach(function (a, i) { a.classList.toggle('active', i === activeIndex); });
+    }
+    document.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+  })();
+</script>
