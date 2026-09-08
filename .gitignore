@@ -12,3 +12,6 @@ Thumbs.db
 
 # Office lock files
 ~$*
+/build/
+/logs/
+/data/
