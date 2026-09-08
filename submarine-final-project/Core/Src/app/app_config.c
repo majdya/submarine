@@ -40,6 +40,10 @@ static void ApplyDefaults(AppConfig_t *cfg) {
   cfg->battery_normal_lower = DEFAULT_BATTERY_NORMAL_LOWER;
   cfg->battery_warning_lower = DEFAULT_BATTERY_WARNING_LOWER;
   cfg->monitor_period_ms = DEFAULT_MONITOR_PERIOD_MS;
+  cfg->temp_enabled = 1;
+  cfg->humidity_enabled = 1;
+  cfg->light_enabled = 1;
+  cfg->battery_enabled = 1;
 }
 
 void AppConfig_Init(void) {

@@ -48,6 +48,22 @@ typedef struct {
   uint32_t battery_warning_lower;
 
   uint32_t monitor_period_ms; /* Task_Monitor's sensor-poll interval. */
+
+  /* Per-parameter enable/disable, for the 4 environmental sensors only
+     (temp, humidity, light, battery) - a deliberate extension beyond the
+     spec, added at the project owner's explicit request so each
+     submarine can be configured with any combination of these 4 sensors.
+     A disabled parameter is still sampled and reported (AppState_t /
+     DATA_REPORT are unaffected) - it's excluded only from the Monitor
+     module's overall-mode vote (see task_monitor.c's WorstMode() loop),
+     so "sensor disabled" reads as "not contributing to alarm status",
+     not "not measured". Defaults to enabled (1) for all four - see
+     app_config.c's ApplyDefaults - so existing behavior is unchanged
+     until something explicitly disables a sensor. */
+  uint8_t temp_enabled;
+  uint8_t humidity_enabled;
+  uint8_t light_enabled;
+  uint8_t battery_enabled;
 } AppConfig_t;
 
 /* Must be called once, before any task that reads config starts (from

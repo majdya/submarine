@@ -87,6 +87,8 @@ void Error_Handler(void);
 #define LED2_GPIO_Port GPIOB
 #define SILENCE_Pin GPIO_PIN_10
 #define SILENCE_GPIO_Port GPIOA
+#define IR_RECEIVER_Pin GPIO_PIN_10
+#define IR_RECEIVER_GPIO_Port GPIOB  /* D6 on the 9-in-1 shield - see ir_receiver.h */
 #define SILENCE_EXTI_IRQn EXTI15_10_IRQn
 
 /* USER CODE BEGIN Private defines */

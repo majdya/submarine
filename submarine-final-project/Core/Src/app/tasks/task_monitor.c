@@ -82,19 +82,32 @@ void Task_Monitor(void *argument) {
        parameters don't get a vote - treat them as Normal rather than
        manufacturing an Error mode out of "no data yet" during the first
        couple of seconds after boot. */
+    /* Per-parameter enable/disable (deliberate extension beyond the spec,
+       see app_config.h's *_enabled fields): a disabled parameter is still
+       sampled and stored in `readings` above exactly as before - it's
+       excluded only from this vote, so it never contributes to Warning/
+       Error alarm status while disabled. */
     AppMode_t mode = APP_MODE_NORMAL;
     if (s_dht_valid) {
-      mode = WorstMode(mode, ClassifyTemp(&cfg, (int32_t)s_dht_temp));
-      mode = WorstMode(mode, ClassifyLowerBound(s_dht_humidity,
-                                                 cfg.humidity_normal_lower,
-                                                 cfg.humidity_warning_lower));
+      if (cfg.temp_enabled) {
+        mode = WorstMode(mode, ClassifyTemp(&cfg, (int32_t)s_dht_temp));
+      }
+      if (cfg.humidity_enabled) {
+        mode = WorstMode(mode, ClassifyLowerBound(s_dht_humidity,
+                                                   cfg.humidity_normal_lower,
+                                                   cfg.humidity_warning_lower));
+      }
     }
-    mode = WorstMode(mode, ClassifyLowerBound(readings.light_raw,
-                                               cfg.light_normal_lower,
-                                               cfg.light_warning_lower));
-    mode = WorstMode(mode, ClassifyLowerBound(readings.battery_raw,
-                                               cfg.battery_normal_lower,
-                                               cfg.battery_warning_lower));
+    if (cfg.light_enabled) {
+      mode = WorstMode(mode, ClassifyLowerBound(readings.light_raw,
+                                                 cfg.light_normal_lower,
+                                                 cfg.light_warning_lower));
+    }
+    if (cfg.battery_enabled) {
+      mode = WorstMode(mode, ClassifyLowerBound(readings.battery_raw,
+                                                 cfg.battery_normal_lower,
+                                                 cfg.battery_warning_lower));
+    }
     readings.mode = mode;
 
     AppState_SetSensorReadings(&readings);

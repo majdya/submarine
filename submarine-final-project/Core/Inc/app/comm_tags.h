@@ -56,4 +56,16 @@
    app_command.c's HandleGetData/HandleGetEvents for why. */
 #define TAG_LOG_LINE 0x18u /* raw bytes, not NUL-terminated */
 
+/* Optional field on the same SET_LIMITS command (MSG_TYPE_CMD_SET_LIMITS):
+   enable/disable TAG_PARAM's contribution to the Monitor module's overall
+   mode, without touching its Normal/Warning bounds. Deliberate extension
+   beyond the spec, added at the project owner's explicit request so each
+   submarine can be configured with any combination of the 4 environmental
+   sensors (temp/humidity/light/battery). Omit this tag entirely to leave
+   the enabled state unchanged (e.g. an old-style limits-only command still
+   behaves exactly as before). See app_config.h's *_enabled fields and
+   task_monitor.c's WorstMode() loop for what "disabled" actually means -
+   still sampled/reported, just excluded from alarm status. */
+#define TAG_ENABLED 0x19u /* u8, 0 or 1 - optional, SET_LIMITS only */
+
 #endif /* APP_COMM_TAGS_H */

@@ -25,12 +25,16 @@ static void SendAck(uint8_t status) {
 static void HandleSetLimits(const uint8_t *payload, uint16_t len) {
   /* Decode every present field first - a command is only ever applied
      as a whole, never partially, so a malformed/incomplete one can't
-     leave AppConfig_t half-updated. */
+     leave AppConfig_t half-updated. TAG_ENABLED is optional (see
+     comm_tags.h): a command can carry it alone to flip a sensor on/off
+     without touching its limits, carry limits alone (the original,
+     pre-existing shape), or carry both together. */
   size_t offset = 0;
   TLV_Field_t field;
   uint8_t have_param = 0, param = 0;
   uint8_t have_normal_min = 0, have_normal_max = 0;
   uint8_t have_warning_min = 0, have_warning_max = 0;
+  uint8_t have_enabled = 0, enabled = 0;
   int32_t normal_min = 0, normal_max = 0, warning_min = 0, warning_max = 0;
 
   while (TLV_Decode(payload, len, &offset, &field)) {
@@ -50,17 +54,36 @@ static void HandleSetLimits(const uint8_t *payload, uint16_t len) {
       case TAG_WARNING_MAX:
         have_warning_max = TLV_FieldAsI32(&field, &warning_max);
         break;
+      case TAG_ENABLED:
+        have_enabled = TLV_FieldAsU8(&field, &enabled);
+        break;
       default:
         break; /* unknown tag - ignore, keeps this forward-compatible */
     }
   }
 
-  if (!have_param || !have_normal_min || !have_warning_min) {
+  if (!have_param) {
     SendAck(STATUS_ERROR);
     return;
   }
-  if (param == PARAM_TEMP && (!have_normal_max || !have_warning_max)) {
-    SendAck(STATUS_ERROR); /* temp needs both ends of both ranges */
+
+  /* Limits are all-or-nothing: either none of the four bound fields are
+     present (this command is enabled/disabled-only), or a complete set
+     is (normal_min+warning_min always; normal_max+warning_max too, but
+     only for PARAM_TEMP - the other three are lower-bound-only, per
+     app_config.h). Anything in between is malformed. */
+  uint8_t any_bound = have_normal_min || have_normal_max || have_warning_min || have_warning_max;
+  uint8_t have_limits = 0;
+  if (any_bound) {
+    have_limits = have_normal_min && have_warning_min &&
+                  (param != PARAM_TEMP || (have_normal_max && have_warning_max));
+    if (!have_limits) {
+      SendAck(STATUS_ERROR);
+      return;
+    }
+  }
+  if (!have_limits && !have_enabled) {
+    SendAck(STATUS_ERROR); /* nothing to actually do */
     return;
   }
 
@@ -68,22 +91,34 @@ static void HandleSetLimits(const uint8_t *payload, uint16_t len) {
   AppConfig_Get(&cfg);
   switch (param) {
     case PARAM_TEMP:
-      cfg.temp_normal_min = normal_min;
-      cfg.temp_normal_max = normal_max;
-      cfg.temp_warning_min = warning_min;
-      cfg.temp_warning_max = warning_max;
+      if (have_limits) {
+        cfg.temp_normal_min = normal_min;
+        cfg.temp_normal_max = normal_max;
+        cfg.temp_warning_min = warning_min;
+        cfg.temp_warning_max = warning_max;
+      }
+      if (have_enabled) cfg.temp_enabled = enabled ? 1u : 0u;
       break;
     case PARAM_HUMIDITY:
-      cfg.humidity_normal_lower = (uint32_t)normal_min;
-      cfg.humidity_warning_lower = (uint32_t)warning_min;
+      if (have_limits) {
+        cfg.humidity_normal_lower = (uint32_t)normal_min;
+        cfg.humidity_warning_lower = (uint32_t)warning_min;
+      }
+      if (have_enabled) cfg.humidity_enabled = enabled ? 1u : 0u;
       break;
     case PARAM_LIGHT:
-      cfg.light_normal_lower = (uint32_t)normal_min;
-      cfg.light_warning_lower = (uint32_t)warning_min;
+      if (have_limits) {
+        cfg.light_normal_lower = (uint32_t)normal_min;
+        cfg.light_warning_lower = (uint32_t)warning_min;
+      }
+      if (have_enabled) cfg.light_enabled = enabled ? 1u : 0u;
       break;
     case PARAM_BATTERY:
-      cfg.battery_normal_lower = (uint32_t)normal_min;
-      cfg.battery_warning_lower = (uint32_t)warning_min;
+      if (have_limits) {
+        cfg.battery_normal_lower = (uint32_t)normal_min;
+        cfg.battery_warning_lower = (uint32_t)warning_min;
+      }
+      if (have_enabled) cfg.battery_enabled = enabled ? 1u : 0u;
       break;
     default:
       SendAck(STATUS_ERROR);

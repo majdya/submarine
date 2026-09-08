@@ -41,6 +41,8 @@
 #include "task_log.h"
 #include "task_monitor.h"
 #include "task_watchdog.h"
+#include "task_ir_detect.h"
+#include "ir_receiver.h"
 #include <stdio.h>
 #include <string.h>
 /* USER CODE END Includes */
@@ -131,6 +133,13 @@ const osThreadAttr_t watchdogTask_attributes = {
     .name = "WatchdogTask",
     .stack_size = 256 * 4,
     .priority = (osPriority_t)osPriorityHigh,
+};
+
+osThreadId_t irDetectTaskHandle;
+const osThreadAttr_t irDetectTask_attributes = {
+    .name = "IrDetectTask",
+    .stack_size = 256 * 4,
+    .priority = (osPriority_t)osPriorityNormal,
 };
 /* USER CODE BEGIN PV */
 
@@ -287,6 +296,8 @@ int main(void) {
   commRxTaskHandle = osThreadNew(Task_CommRx, NULL, &commRxTask_attributes);
   watchdogTaskHandle =
       osThreadNew(Task_Watchdog, NULL, &watchdogTask_attributes);
+  irDetectTaskHandle =
+      osThreadNew(Task_IrDetect, NULL, &irDetectTask_attributes);
   /* USER CODE END RTOS_THREADS */
 
   /* USER CODE BEGIN RTOS_EVENTS */
@@ -768,6 +779,16 @@ static void MX_GPIO_Init(void) {
   GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : IR_RECEIVER_Pin (PB10 / D6) - plain polled
+    input, NOT an interrupt: PB10 shares EXTI line 10 with
+    SILENCE_Pin (PA10), and only one GPIO port can be routed to a
+    given EXTI line number at a time. Task_IrDetect polls this pin
+    instead - see task_ir_detect.c. */
+  GPIO_InitStruct.Pin = IR_RECEIVER_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(IR_RECEIVER_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PB5 */
   GPIO_InitStruct.Pin = GPIO_PIN_5;

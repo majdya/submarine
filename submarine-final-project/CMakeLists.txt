@@ -49,6 +49,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/app/sensors_adc.c
     Core/Src/app/indicators.c
     Core/Src/app/buttons.c
+    Core/Src/app/ir_receiver.c
     Core/Src/app/dht11.c
     Core/Src/app/rtc_ds1307.c
     Core/Src/app/sdcard.c
@@ -72,6 +73,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/app/tasks/task_comm_rx.c
     Core/Src/app/tasks/task_keepalive.c
     Core/Src/app/tasks/task_watchdog.c
+    Core/Src/app/tasks/task_ir_detect.c
     Middlewares/FatFs/src/ff.c
     Middlewares/FatFs/src/diskio.c
 )

@@ -14,8 +14,8 @@
 #define RGB_MAX 999u
 #define ALARM_DUTY 500u /* audible but not full-scale */
 
-static void SetRgbGreen(void) { RGB_SetDuty(0, RGB_MAX, 0); }
-static void SetRgbYellow(void) { RGB_SetDuty(RGB_MAX, RGB_MAX, 0); }
+static void SetRgbGreen(void) { RGB_SetDuty(0, 0, RGB_MAX); }
+static void SetRgbYellow(void) { RGB_SetDuty(RGB_MAX, 0, ALARM_DUTY); }
 static void SetRgbRed(void) { RGB_SetDuty(RGB_MAX, 0, 0); }
 
 /* Alarm state is owned entirely by this task - it is the only place that
@@ -38,25 +38,25 @@ static void AlarmOff(void) {
    below (TAG_EVENT_TYPE/TAG_EVENT_VALUE, see comm_tags.h) - there is no
    separate text-field formatter for it any more. */
 static void FormatEventName(AppEventType_t type, uint32_t value, char *out,
-                             size_t out_len) {
+                            size_t out_len) {
   switch (type) {
-    case EVENT_OBJECT_DETECTED:
-      snprintf(out, out_len, "EVENT object_detected");
-      break;
-    case EVENT_OBJECT_CLEARED:
-      snprintf(out, out_len, "EVENT object_cleared");
-      break;
-    case EVENT_SILENCE_PRESSED:
-      snprintf(out, out_len, "EVENT silence_pressed");
-      break;
-    case EVENT_MODE_CHANGED:
-      snprintf(out, out_len, "EVENT mode_changed %s->%s",
-               AppMode_Name((AppMode_t)APP_EVENT_MODE_CHANGE_OLD(value)),
-               AppMode_Name((AppMode_t)APP_EVENT_MODE_CHANGE_NEW(value)));
-      break;
-    default:
-      snprintf(out, out_len, "EVENT unknown type=%d", (int)type);
-      break;
+  case EVENT_OBJECT_DETECTED:
+    snprintf(out, out_len, "EVENT object_detected");
+    break;
+  case EVENT_OBJECT_CLEARED:
+    snprintf(out, out_len, "EVENT object_cleared");
+    break;
+  case EVENT_SILENCE_PRESSED:
+    snprintf(out, out_len, "EVENT silence_pressed");
+    break;
+  case EVENT_MODE_CHANGED:
+    snprintf(out, out_len, "EVENT mode_changed %s->%s",
+             AppMode_Name((AppMode_t)APP_EVENT_MODE_CHANGE_OLD(value)),
+             AppMode_Name((AppMode_t)APP_EVENT_MODE_CHANGE_NEW(value)));
+    break;
+  default:
+    snprintf(out, out_len, "EVENT unknown type=%d", (int)type);
+    break;
   }
 }
 
@@ -82,18 +82,18 @@ static void HandleModeChanged(uint32_t value) {
   AppMode_t new_mode = (AppMode_t)APP_EVENT_MODE_CHANGE_NEW(value);
 
   switch (new_mode) {
-    case APP_MODE_NORMAL:
-      SetRgbGreen();
-      AlarmOff();
-      break;
-    case APP_MODE_WARNING:
-      SetRgbYellow();
-      AlarmOff();
-      break;
-    case APP_MODE_ERROR:
-      SetRgbRed();
-      AlarmOn();
-      break;
+  case APP_MODE_NORMAL:
+    SetRgbGreen();
+    AlarmOff();
+    break;
+  case APP_MODE_WARNING:
+    SetRgbYellow();
+    AlarmOff();
+    break;
+  case APP_MODE_ERROR:
+    SetRgbRed();
+    AlarmOn();
+    break;
   }
 }
 
@@ -133,20 +133,20 @@ void Task_Event(void *argument) {
     }
 
     switch (evt.type) {
-      case EVENT_MODE_CHANGED:
-        HandleModeChanged(evt.value);
-        break;
-      case EVENT_OBJECT_DETECTED:
-        HandleObjectDetected();
-        break;
-      case EVENT_OBJECT_CLEARED:
-        HandleObjectCleared();
-        break;
-      case EVENT_SILENCE_PRESSED:
-        HandleSilencePressed();
-        break;
-      default:
-        break;
+    case EVENT_MODE_CHANGED:
+      HandleModeChanged(evt.value);
+      break;
+    case EVENT_OBJECT_DETECTED:
+      HandleObjectDetected();
+      break;
+    case EVENT_OBJECT_CLEARED:
+      HandleObjectCleared();
+      break;
+    case EVENT_SILENCE_PRESSED:
+      HandleSilencePressed();
+      break;
+    default:
+      break;
     }
 
     RTC_DateTime_t dt = {0};
