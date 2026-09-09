@@ -69,6 +69,7 @@ class CentralComputer {
   ManagementCommand& commands() { return managementCommand_; }
   LogModule& log() { return logModule_; }
   DataCollection& dataCollection() { return dataCollection_; }
+  DataStore& dataStore() { return dataStore_; }
 
   void enforceLogRetention(uint32_t todayYmd) { logModule_.enforceRetention(todayYmd); }
 

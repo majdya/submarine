@@ -55,11 +55,31 @@ From the browser you can do everything the console menu can: add a submarine,
 assign/update/end a mission, associate combat submarines with the same mission,
 and send messages between them — plus see each connected combat submarine's most
 recent live LNC data (mode, sensor readings, last event) without leaving the page.
+It also exposes the Management Command module's Set Limits (spec §2.5/§3.2) —
+previously only reachable through the console's own extra menu item — from a
+form, against a live-connected combat submarine's LNC.
 The page polls `GET /api/state` every 2 seconds and posts form-encoded requests to
 `/api/submarines`, `/api/submarines/:serial/mission[/update|/end]`,
-`/api/submarines/:serial/participate`, and `/api/messages` (see `dashboard_api.h`
-for the exact contract, and `http_server.h` for the tiny hand-rolled server itself
-— raw sockets, no library, since this build has no network access to fetch one).
+`/api/submarines/:serial/participate`, `/api/submarines/:serial/limits`, and
+`/api/messages` (see `dashboard_api.h` for the exact contract, and `http_server.h`
+for the tiny hand-rolled server itself — raw sockets, no library, since this
+build has no network access to fetch one).
+
+**It's a plain static webapp, not embedded in the binary.** The page itself
+lives at `central-computer/web/dashboard.html` — a real HTML/CSS/JS file, not
+a C++ string — and is read from disk on every `GET /` (not cached). Run
+`central_computer` from the `central-computer/` source directory (same
+convention as the existing `logs/<serial>` and `data/<serial>` relative
+paths) and it reads that file directly: edit it, refresh the browser, no
+rebuild needed. Run the *built* exe from its own output directory instead
+(e.g. `build/central-computer/Debug/`, per `build-and-start.md`) and it
+reads a copy of `web/` that CMake places next to the exe automatically
+after every build (see the `add_custom_command(... POST_BUILD ...)` in
+`CMakeLists.txt`) — that copy is what keeps the documented "run the built
+exe" workflow working; edit the source under `central-computer/web/` and
+rebuild to refresh it, not the copy itself. Either way, an exe with no
+`web/dashboard.html` reachable from its working directory falls back to a
+small "not found" page rather than failing to start.
 
 **Concurrency.** The console and the dashboard share one `Fleet` guarded by a
 single coarse-grained `std::mutex` (`g_fleetMutex` in `main.cpp`, passed into
@@ -77,11 +97,23 @@ console only — the dashboard is additive, never required.
 
 - **Real hardware, not mocked.** `SerialTransport` opens a real COM port /
   tty and speaks the actual frame protocol. Because there is normally only one
-  physical LNC on a bench, only the one `CombatSubmarine` you point at real
-  hardware gets a connected `CentralComputer`; every other one defaults to a
+  physical LNC on a bench, only the one submarine you point at real hardware
+  gets a connected `CentralComputer`; every other one defaults to a
   disconnected `LoopbackTransport` placeholder (harmless - it just never
   produces or accepts data) rather than a null/optional transport, which keeps
   `CentralComputer` simple to use everywhere.
+- **Every submarine has a `CentralComputer` - Research included.** The spec's
+  OOP Part literally says the central computer "belongs to each combat
+  submarine". This project deliberately goes further, at the project owner's
+  explicit request: `Submarine` (the common base class) owns the
+  `CentralComputer`, auto-creating a default loopback one when the caller
+  doesn't supply a real transport, so a `ResearchSubmarine` can be wired to
+  real LNC hardware exactly like a `CombatSubmarine` can. `CombatSubmarine`
+  keeps its own `centralComputer()` accessors (now just forwarding to the base
+  class) purely so its existing callers didn't need to change. Participating
+  submarines and inter-submarine messaging (operations 7-9) remain
+  Combat-only, since those are genuinely combat-specific OOP features
+  unrelated to hardware.
 - **`ITransport` abstraction.** Per the spec's own note ("the physical transport
   is a configuration detail of the communication module, not a structural
   assumption elsewhere"), `CommLink` only ever talks to `ITransport`. This is
@@ -107,6 +139,15 @@ console only — the dashboard is additive, never required.
 - **Command consolidation**: `setLimits()` takes a `PARAM_*` selector rather
   than exposing 8 near-identical methods, matching the same consolidation
   decision already made on the firmware side.
+- **Per-sensor enable/disable is piggybacked on `setLimits()`, not a new
+  command** - `setLimits()`'s optional `enabled` parameter encodes
+  `TAG_ENABLED` on the same `MSG_TYPE_CMD_SET_LIMITS` message (see
+  `comm_tags.h`), rather than inventing a second message type. This is a
+  deliberate extension beyond the spec, added at the project owner's
+  explicit request, scoped to exactly the 4 environmental sensors (temp,
+  humidity, light, battery) - a disabled sensor is still sampled and
+  reported, just excluded from the LNC's overall Operating Mode vote (see
+  `task_monitor.c`'s `WorstMode()` loop on the firmware side).
 - **GET_DATA and GET_EVENTS return identical content** today (both query the
   LNC's date-named log files - there is no separate continuous data stream on
   the firmware side yet). Documented as a known limitation, not silently

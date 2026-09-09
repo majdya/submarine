@@ -21,9 +21,10 @@ class Menu {
   // type and enter the relevant details." Two overloads stand in for
   // "choose the type"; returns nullptr if the serial number is already
   // taken (see Fleet::addSubmarine).
-  Submarine* addResearchSubmarine(std::string serial, std::string name);
+  Submarine* addResearchSubmarine(std::string serial, std::string name,
+                                   std::unique_ptr<CentralComputer> centralComputer = nullptr);
   Submarine* addCombatSubmarine(std::string serial, std::string name,
-                                 std::unique_ptr<CentralComputer> centralComputer);
+                                 std::unique_ptr<CentralComputer> centralComputer = nullptr);
 
   // Operation 2: every submarine currently in the fleet, in insertion order.
   const std::vector<std::unique_ptr<Submarine>>& allSubmarines() const { return fleet_.submarines(); }

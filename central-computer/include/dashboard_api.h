@@ -51,6 +51,26 @@ class DashboardApi {
   std::string addParticipating(const std::string& serial, const std::string& other);
   std::string sendMessage(const std::string& from, const std::string& to, const std::string& content);
 
+  // Sends a Set Limits management command (spec S2.5/S3.2) to the given
+  // combat submarine's LNC over its live connection. param is one of
+  // "temp"/"humidity"/"light"/"battery"; normalMax/warningMax strings are
+  // required only for "temp" (see comm_tags.h - the other three are
+  // single-lower-bound parameters), pass empty strings for those (and
+  // leave all four blank to change only `enabled`, below). Numeric
+  // fields are parsed here rather than left to the caller so both the
+  // console and this HTTP route share identical validation via
+  // ManagementCommand::setLimits(). Requires the submarine to be
+  // connected; returns an error if the LNC doesn't ACK within the timeout.
+  //
+  // `enabledStr`: "enable", "disable", or empty to leave the sensor's
+  // enabled state unchanged - the per-sensor enable/disable extension
+  // (TAG_ENABLED), deliberately beyond the spec, added at the project
+  // owner's explicit request for exactly these 4 environmental sensors.
+  std::string setLimits(const std::string& serial, const std::string& param,
+                         const std::string& normalMinStr, const std::string& normalMaxStr,
+                         const std::string& warningMinStr, const std::string& warningMaxStr,
+                         const std::string& enabledStr = "");
+
  private:
   Menu& menu_;
   std::mutex& fleetMutex_;

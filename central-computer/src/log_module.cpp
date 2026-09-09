@@ -3,7 +3,6 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
-#include <iostream>
 #include <sstream>
 
 namespace fs = std::filesystem;
@@ -62,7 +61,13 @@ void LogModule::writeLine(uint32_t ymd, const std::string& line) {
   fs::path path = fs::path(logDir_) / ymdFileName(ymd);
   std::ofstream out(path, std::ios::app);
   out << line << "\n";
-  std::cout << "[CentralComputer LOG] " << line << "\n";
+  // Deliberately not echoed to stdout: this runs on CommLink's background
+  // reader thread, so every KEEPALIVE (every monitor_period_ms - 5s by
+  // default) used to print here, racing with the console menu's own
+  // std::cin/std::cout prompts on the main thread and burying them. Log
+  // to the file only - a live view belongs in the web dashboard (polled,
+  // not printed) or a future "tail logs" console option, not an
+  // uncontrollable stream mixed into the interactive prompt.
 }
 
 std::string LogModule::formatMode(const proto::Message& msg) const {

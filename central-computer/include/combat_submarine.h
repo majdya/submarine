@@ -18,18 +18,22 @@ namespace submarine {
 // participating in the same mission can communicate with one another and
 // send messages... store the message content together with a reference to
 // the submarine that sent it").
+//
+// The CentralComputer itself is now owned by the Submarine base class (see
+// submarine.h - a deliberate, acknowledged deviation from the spec's
+// literal wording, so a ResearchSubmarine can have one too); this class
+// keeps its own centralComputer() accessors purely so existing callers
+// (combat->centralComputer().foo()) didn't need to change.
 class CombatSubmarine : public Submarine {
  public:
   CombatSubmarine(std::string serialNumber, std::string name,
-                   std::unique_ptr<CentralComputer> centralComputer)
-      : Submarine(std::move(serialNumber), std::move(name)),
-        centralComputer_(std::move(centralComputer)) {}
+                   std::unique_ptr<CentralComputer> centralComputer = nullptr)
+      : Submarine(std::move(serialNumber), std::move(name), std::move(centralComputer)) {}
 
   std::string typeName() const override { return "Combat"; }
   void printDetails(std::ostream& os) const override;
 
-  CentralComputer& centralComputer() { return *centralComputer_; }
-  const CentralComputer& centralComputer() const { return *centralComputer_; }
+  using Submarine::centralComputer;
 
   // Operation 7: "For combat submarine - associate additional combat
   // submarines with the same mission." Stored by serial number (see
@@ -46,7 +50,6 @@ class CombatSubmarine : public Submarine {
   const std::vector<Message>& receivedMessages() const { return receivedMessages_; }
 
  private:
-  std::unique_ptr<CentralComputer> centralComputer_;
   std::vector<std::string> participatingSubmarineSerials_;
   std::vector<Message> receivedMessages_;
 };

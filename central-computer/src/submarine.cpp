@@ -25,6 +25,7 @@ void Submarine::printDetails(std::ostream& os) const {
     os << "  Current mission: " << currentMission_->description() << "\n";
   }
   os << "  Past missions: " << missionHistory_.size() << "\n";
+  os << "  Central computer: " << (centralComputer_->isConnected() ? "CONNECTED" : "not connected") << "\n";
 }
 
 }  // namespace submarine

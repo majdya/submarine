@@ -1,0 +1,724 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Submarine Fleet Dashboard</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0a1119;
+    --bg-elevated: #0e1826;
+    --card: #111e2e;
+    --card-hover: #142334;
+    --border: #1c2f43;
+    --border-soft: #16283a;
+    --text: #e4ecf3;
+    --text-dim: #8ea3b8;
+    --text-faint: #5d7488;
+    --accent: #3a8fd9;
+    --accent-soft: #1f3a52;
+    --combat: #d97a3a;
+    --combat-soft: #3a2818;
+    --research: #3a8fd9;
+    --research-soft: #182b3a;
+    --good: #4cbb6f;
+    --good-soft: #16301f;
+    --warn: #d9b23a;
+    --warn-soft: #322910;
+    --bad: #d95c5c;
+    --bad-soft: #321616;
+    --radius: 12px;
+    --radius-sm: 8px;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -8px rgba(0,0,0,0.4);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background:
+      radial-gradient(1200px 600px at 15% -10%, #10233a 0%, transparent 60%),
+      var(--bg);
+    color: var(--text);
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .topbar {
+    position: sticky; top: 0; z-index: 10;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 32px;
+    background: rgba(10, 17, 25, 0.85);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .topbar-title { display: flex; align-items: center; gap: 12px; }
+  .topbar-icon {
+    width: 34px; height: 34px; border-radius: 9px;
+    background: linear-gradient(135deg, #1f4a6b, #142334);
+    border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 17px;
+  }
+  h1 { font-size: 17px; font-weight: 650; margin: 0; letter-spacing: -0.01em; }
+  .sub { color: var(--text-faint); font-size: 12.5px; margin-top: 1px; }
+  .live-pill {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 12px; color: var(--text-dim);
+    background: var(--bg-elevated); border: 1px solid var(--border);
+    padding: 6px 12px; border-radius: 999px;
+  }
+  .live-dot {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--good);
+    box-shadow: 0 0 0 3px rgba(76,187,111,0.15);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  .page { max-width: 1200px; margin: 0 auto; padding: 24px 32px 48px; }
+
+  .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 24px; }
+  .stat-tile {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 16px 18px;
+  }
+  .stat-tile .stat-value { font-size: 26px; font-weight: 650; letter-spacing: -0.02em; }
+  .stat-tile .stat-label { font-size: 12px; color: var(--text-faint); margin-top: 2px; }
+  .stat-tile.combat .stat-value { color: var(--combat); }
+  .stat-tile.research .stat-value { color: var(--research); }
+  .stat-tile.connected .stat-value { color: var(--good); }
+
+  .toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .section-label {
+    font-size: 11px; font-weight: 650; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--text-faint); margin: 0;
+  }
+  .add-btn {
+    background: var(--accent-soft); color: #bcdcf7; border: 1px solid #2f5a7a;
+    border-radius: var(--radius-sm); padding: 8px 14px; font-size: 12.5px; font-weight: 650;
+    cursor: pointer; font-family: inherit; transition: background 0.12s;
+  }
+  .add-btn:hover { background: #275172; }
+
+  .fleet-list { display: flex; flex-direction: column; gap: 12px; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    box-shadow: var(--shadow);
+    transition: border-color 0.15s;
+  }
+
+  .sub-card { border-left: 3px solid var(--text-faint); }
+  .sub-card.combat { border-left-color: var(--combat); }
+  .sub-card.research { border-left-color: var(--research); }
+
+  .sub-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .sub-card-id { display: flex; flex-direction: column; gap: 3px; }
+  .name { font-weight: 650; font-size: 16px; letter-spacing: -0.01em; }
+  .serial-row { display: flex; align-items: center; gap: 8px; }
+  .serial { color: var(--text-faint); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .head-right { display: flex; align-items: center; gap: 8px; }
+
+  .badge {
+    font-size: 10.5px; font-weight: 650; letter-spacing: 0.02em;
+    padding: 3px 9px; border-radius: 999px; white-space: nowrap;
+  }
+  .badge.assigned { background: var(--good-soft); color: var(--good); }
+  .badge.available { background: var(--bg-elevated); color: var(--text-dim); }
+  .badge.connected { background: var(--accent-soft); color: #7fc4f0; }
+  .badge.disconnected { background: var(--bg-elevated); color: var(--text-faint); }
+  .badge.type-combat { background: var(--combat-soft); color: var(--combat); }
+  .badge.type-research { background: var(--research-soft); color: var(--research); }
+
+  .mode-pill {
+    font-size: 10.5px; font-weight: 650; padding: 3px 9px; border-radius: 999px; letter-spacing: 0.02em;
+  }
+  .mode-pill.m0 { background: var(--good-soft); color: var(--good); }
+  .mode-pill.m1 { background: var(--warn-soft); color: var(--warn); }
+  .mode-pill.m2 { background: var(--bad-soft); color: var(--bad); }
+
+  .card-divider { height: 1px; background: var(--border-soft); margin: 14px 0; }
+
+  .kv-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px 18px; }
+  .kv { font-size: 12.5px; }
+  .kv .k { color: var(--text-faint); margin-bottom: 2px; }
+  .kv .v { color: var(--text); line-height: 1.5; }
+  .kv .v.empty { color: var(--text-faint); font-style: italic; }
+
+  .live-strip {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    background: var(--bg-elevated); border: 1px solid var(--border-soft);
+    border-radius: var(--radius-sm); padding: 10px 14px; margin-top: 12px;
+    font-size: 12.5px;
+  }
+  .live-strip .metric { display: flex; align-items: baseline; gap: 5px; color: var(--text-dim); }
+  .live-strip .metric b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .live-strip .event { color: var(--text-faint); font-size: 12px; }
+
+  .msg-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+  .msg { font-size: 12.5px; background: var(--bg-elevated); border: 1px solid var(--border-soft);
+         border-radius: var(--radius-sm); padding: 8px 11px; }
+  .msg .from { color: var(--text-faint); font-size: 11px; margin-bottom: 2px; }
+
+  .empty-state {
+    text-align: center; padding: 48px 24px; color: var(--text-faint); font-size: 13.5px;
+  }
+  .empty-state .emoji { font-size: 28px; margin-bottom: 10px; display: block; }
+
+  /* --- Per-submarine action tabs, embedded in each card --- */
+  .actions-toggle {
+    display: flex; align-items: center; gap: 6px; margin-top: 14px;
+    background: none; border: none; color: var(--text-faint); font-size: 12px; font-weight: 650;
+    cursor: pointer; padding: 0; font-family: inherit;
+  }
+  .actions-toggle:hover { color: var(--text-dim); }
+  .actions-toggle .chevron { font-size: 10px; transition: transform 0.15s; }
+  .sub-card.actions-open .actions-toggle .chevron { transform: rotate(180deg); }
+
+  .actions-panel { display: none; margin-top: 12px; }
+  .sub-card.actions-open .actions-panel { display: block; }
+
+  .tab-row { display: flex; gap: 4px; margin-bottom: 12px; flex-wrap: wrap; }
+  .tab-btn {
+    background: var(--bg-elevated); border: 1px solid var(--border); color: var(--text-faint);
+    padding: 6px 12px; font-size: 11.5px; font-weight: 650; border-radius: 999px;
+    cursor: pointer; font-family: inherit; transition: background 0.12s, color 0.12s;
+  }
+  .tab-btn:hover { color: var(--text-dim); }
+  .tab-btn.active { background: var(--accent-soft); color: #bcdcf7; border-color: #2f6a94; }
+
+  .tab-pane { display: none; }
+  .tab-pane.active { display: block; }
+
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  label { font-size: 11px; color: var(--text-faint); display: block; margin: 10px 0 4px; font-weight: 550; }
+  label:first-child { margin-top: 0; }
+  input, select {
+    background: var(--bg-elevated); color: var(--text); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 8px 10px; font-size: 13px; width: 100%;
+    box-sizing: border-box; font-family: inherit; transition: border-color 0.15s;
+  }
+  input:focus, select:focus { outline: none; border-color: var(--accent); }
+  input::placeholder { color: var(--text-faint); }
+
+  button.act {
+    background: var(--accent-soft); color: #bcdcf7; border: 1px solid #2f5a7a;
+    border-radius: var(--radius-sm); padding: 8px 12px; font-size: 12.5px; font-weight: 600;
+    cursor: pointer; font-family: inherit; transition: background 0.12s, border-color 0.12s;
+    margin-top: 4px;
+  }
+  button.act:hover { background: #275172; border-color: #3a6f94; }
+  button.act.secondary { background: var(--bg-elevated); color: var(--text-dim); border-color: var(--border); }
+  button.act.secondary:hover { background: var(--card-hover); color: var(--text); }
+  button.act.danger { background: var(--bad-soft); color: #f0a3a3; border-color: #5a2a2a; }
+  button.act.danger:hover { background: #3a1c1c; }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .status-line { font-size: 11.5px; min-height: 15px; margin-top: 8px; font-weight: 550; }
+  .status-line.ok { color: var(--good); }
+  .status-line.err { color: var(--bad); }
+
+  .toggle-group { display: flex; gap: 4px; margin: 4px 0 0; }
+  .toggle-group .toggle-btn {
+    flex: 1; text-align: center;
+    background: var(--bg-elevated); border: 1px solid var(--border); color: var(--text-faint);
+    padding: 8px 6px; font-size: 12px; font-weight: 600; border-radius: var(--radius-sm);
+    cursor: pointer; transition: background 0.1s, color 0.1s, border-color 0.1s;
+  }
+  .toggle-group .toggle-btn:hover { border-color: #35516d; color: var(--text-dim); }
+  .toggle-group .toggle-btn.active { background: var(--accent-soft); color: #bcdcf7; border-color: #2f6a94; }
+  .toggle-group .toggle-btn.active.combat { background: var(--combat-soft); border-color: #6a462a; color: var(--combat); }
+  .toggle-group .toggle-btn.active.research { background: var(--research-soft); border-color: #2a5a6a; color: var(--research); }
+  .toggle-group .toggle-btn.active.enable { background: var(--good-soft); border-color: #2f6a3a; color: var(--good); }
+  .toggle-group .toggle-btn.active.disable { background: var(--bad-soft); border-color: #6a2f2f; color: var(--bad); }
+
+  .field-hint { font-size: 10.5px; color: var(--text-faint); margin-top: 3px; line-height: 1.4; }
+
+  /* --- Add-submarine modal --- */
+  .modal-backdrop {
+    display: none; position: fixed; inset: 0; background: rgba(5,9,14,0.6);
+    z-index: 50; align-items: flex-start; justify-content: center; padding-top: 10vh;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 22px 24px; width: 380px; max-width: 90vw;
+  }
+  .modal-title { font-size: 15px; font-weight: 650; margin-bottom: 2px; }
+  .modal-hint { font-size: 12px; color: var(--text-faint); margin-bottom: 4px; }
+  .modal-close-row { display: flex; justify-content: flex-end; margin-top: 14px; }
+  .link-btn {
+    background: none; border: none; color: var(--text-faint); font-size: 12px;
+    cursor: pointer; font-family: inherit; padding: 6px 10px;
+  }
+  .link-btn:hover { color: var(--text-dim); }
+
+  @media (max-width: 700px) {
+    .stat-row { grid-template-columns: repeat(2, 1fr); }
+    .field-row { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-title">
+    <div class="topbar-icon">🛰️</div>
+    <div>
+      <h1>Submarine Fleet Dashboard</h1>
+      <div class="sub">Live view + full control &middot; the console menu remains the spec's graded deliverable, against the same fleet</div>
+    </div>
+  </div>
+  <div class="live-pill"><span class="live-dot"></span>Live &middot; refreshing every 2s</div>
+</div>
+
+<div class="page">
+
+  <div class="stat-row" id="stat-row">
+    <div class="stat-tile"><div class="stat-value" id="stat-total">0</div><div class="stat-label">Fleet size</div></div>
+    <div class="stat-tile combat"><div class="stat-value" id="stat-combat">0</div><div class="stat-label">Combat</div></div>
+    <div class="stat-tile research"><div class="stat-value" id="stat-research">0</div><div class="stat-label">Research</div></div>
+    <div class="stat-tile connected"><div class="stat-value" id="stat-connected">0</div><div class="stat-label">Hardware connected</div></div>
+  </div>
+
+  <div class="toolbar">
+    <div class="section-label">Fleet</div>
+    <button class="add-btn" onclick="openAddModal()">+ Add submarine</button>
+  </div>
+  <div class="fleet-list" id="fleet"></div>
+</div>
+
+<div class="modal-backdrop" id="add-modal">
+  <div class="modal">
+    <div class="modal-title">Add submarine</div>
+    <div class="modal-hint">Register a new unit to the fleet</div>
+    <form onsubmit="return doAdd(event)">
+      <label>Type</label>
+      <input type="hidden" id="add-type" value="research">
+      <div class="toggle-group" data-target="add-type">
+        <button type="button" class="toggle-btn research active" data-value="research">Research</button>
+        <button type="button" class="toggle-btn combat" data-value="combat">Combat</button>
+      </div>
+      <label>Serial number</label>
+      <input id="add-serial" required placeholder="e.g. R-104">
+      <label>Name</label>
+      <input id="add-name" required placeholder="e.g. Nautilus">
+      <label>Serial port</label>
+      <input id="add-port" placeholder="COM8 or /dev/ttyACM0">
+      <div class="field-hint">Any submarine type may have hardware. Leave blank for no LNC link.</div>
+      <div class="modal-close-row">
+        <button type="button" class="link-btn" onclick="closeAddModal()">Cancel</button>
+        <button type="submit" class="act">Add submarine</button>
+      </div>
+      <div class="status-line" id="add-status"></div>
+    </form>
+  </div>
+</div>
+
+<script>
+const MODE_NAMES = ['NORMAL', 'WARNING', 'ERROR'];
+let lastData = { submarines: [] };
+
+function openAddModal() {
+  document.getElementById('add-modal').classList.add('open');
+}
+function closeAddModal() {
+  document.getElementById('add-modal').classList.remove('open');
+  document.getElementById('add-status').textContent = '';
+}
+
+function toggleActions(serial) {
+  const card = document.getElementById('card-' + cssEscape(serial));
+  if (card) card.classList.toggle('actions-open');
+}
+
+function showTab(serial, tabName) {
+  const card = document.getElementById('card-' + cssEscape(serial));
+  card.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tabName));
+  card.querySelectorAll('.tab-pane').forEach(p => p.classList.toggle('active', p.dataset.tab === tabName));
+}
+
+function cssEscape(s) {
+  return s.replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+// Wires every .toggle-group's buttons: clicking one sets the group's
+// hidden input (named by data-target) to that button's data-value and
+// marks it active, so postForm()'s existing getElementById(...).value
+// reads keep working unchanged.
+function initToggleGroups(root) {
+  root.querySelectorAll('.toggle-group').forEach(group => {
+    if (group.dataset.wired) return;
+    group.dataset.wired = '1';
+    const hidden = document.getElementById(group.dataset.target);
+    group.querySelectorAll('.toggle-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        group.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        if (hidden) hidden.value = btn.dataset.value;
+      });
+    });
+  });
+}
+
+async function postForm(path, fields) {
+  const body = new URLSearchParams(fields);
+  const res = await fetch(path, { method: 'POST', body });
+  return res.json();
+}
+
+function setStatus(id, result) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = result.ok ? 'Saved' : ('Error: ' + result.error);
+  el.className = 'status-line ' + (result.ok ? 'ok' : 'err');
+}
+
+async function doAdd(ev) {
+  ev.preventDefault();
+  const result = await postForm('/api/submarines', {
+    type: document.getElementById('add-type').value,
+    serial: document.getElementById('add-serial').value,
+    name: document.getElementById('add-name').value,
+    port: document.getElementById('add-port').value,
+  });
+  setStatus('add-status', result);
+  if (result.ok) {
+    closeAddModal();
+    document.getElementById('add-serial').value = '';
+    document.getElementById('add-name').value = '';
+    document.getElementById('add-port').value = '';
+    refresh();
+  }
+  return false;
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function doMission(ev, serial, mode) {
+  if (ev) ev.preventDefault();
+  const id = 'mission-' + cssEscape(serial);
+  const fields = {
+    serial,
+    description: document.getElementById(id + '-desc').value,
+    commanderName: document.getElementById(id + '-commander').value,
+    personnelCount: document.getElementById(id + '-personnel').value,
+    researchTopic: document.getElementById(id + '-topic').value,
+    researcherNames: document.getElementById(id + '-researchers').value,
+  };
+  const path = mode === 'assign' ? '/api/submarines/' + encodeURIComponent(serial) + '/mission'
+                                  : '/api/submarines/' + encodeURIComponent(serial) + '/mission/update';
+  const result = await postForm(path, fields);
+  setStatus(id + '-status', result);
+  if (result.ok) refreshSoon();
+  return false;
+}
+
+async function doEndMission(serial) {
+  const id = 'mission-' + cssEscape(serial);
+  const result = await postForm('/api/submarines/' + encodeURIComponent(serial) + '/mission/end', {});
+  setStatus(id + '-status', result);
+  if (result.ok) refreshSoon();
+}
+
+async function doAssociate(ev, serial) {
+  ev.preventDefault();
+  const id = 'combat-' + cssEscape(serial);
+  const other = document.getElementById(id + '-other').value;
+  const result = await postForm('/api/submarines/' + encodeURIComponent(serial) + '/participate', { other });
+  setStatus(id + '-assoc-status', result);
+  if (result.ok) refreshSoon();
+  return false;
+}
+
+async function doMessage(ev, serial) {
+  ev.preventDefault();
+  const id = 'combat-' + cssEscape(serial);
+  const result = await postForm('/api/messages', {
+    from: serial,
+    to: document.getElementById(id + '-msg-to').value,
+    content: document.getElementById(id + '-msg-content').value,
+  });
+  setStatus(id + '-msg-status', result);
+  if (result.ok) refreshSoon();
+  return false;
+}
+
+async function doSetLimits(ev, serial) {
+  ev.preventDefault();
+  const id = 'limits-' + cssEscape(serial);
+  const result = await postForm('/api/submarines/' + encodeURIComponent(serial) + '/limits', {
+    param: document.getElementById(id + '-param').value,
+    normalMin: document.getElementById(id + '-normal-min').value,
+    normalMax: document.getElementById(id + '-normal-max').value,
+    warningMin: document.getElementById(id + '-warning-min').value,
+    warningMax: document.getElementById(id + '-warning-max').value,
+    enabled: document.getElementById(id + '-enabled').value,
+  });
+  setStatus(id + '-status', result);
+  return false;
+}
+
+function renderActionsPanel(sub) {
+  const s = sub.serial;
+  const safe = cssEscape(s);
+  const isCombat = sub.type === 'Combat';
+
+  let tabs = `<div class="tab-row">`;
+  tabs += `<button type="button" class="tab-btn active" data-tab="mission" onclick="showTab('${esc(s)}','mission')">Mission</button>`;
+  if (isCombat) {
+    tabs += `<button type="button" class="tab-btn" data-tab="combat" onclick="showTab('${esc(s)}','combat')">Associate &amp; message</button>`;
+  }
+  tabs += `<button type="button" class="tab-btn" data-tab="limits" onclick="showTab('${esc(s)}','limits')">Sensor limits</button>`;
+  tabs += `</div>`;
+
+  let missionPane = `<div class="tab-pane active" data-tab="mission">
+    <label>Description</label>
+    <input id="mission-${safe}-desc" placeholder="Mission description">
+    <div class="field-row">
+      <div><label>Commander (combat)</label><input id="mission-${safe}-commander"></div>
+      <div><label>Personnel (combat)</label><input id="mission-${safe}-personnel" type="number"></div>
+    </div>
+    <label>Research topic (research)</label>
+    <input id="mission-${safe}-topic">
+    <label>Researcher names (research, comma-separated)</label>
+    <input id="mission-${safe}-researchers">
+    <div class="btn-row">
+      <button type="button" class="act" onclick="doMission(event,'${esc(s)}','assign')">Assign new</button>
+      <button type="button" class="act secondary" onclick="doMission(event,'${esc(s)}','update')">Update existing</button>
+      <button type="button" class="act danger" onclick="doEndMission('${esc(s)}')">End mission</button>
+    </div>
+    <div class="status-line" id="mission-${safe}-status"></div>
+  </div>`;
+
+  let combatPane = '';
+  if (isCombat) {
+    combatPane = `<div class="tab-pane" data-tab="combat">
+      <label>Associate with other combat submarine (serial)</label>
+      <div class="btn-row" style="align-items:flex-start">
+        <input id="combat-${safe}-other" placeholder="e.g. C-2" style="flex:1">
+        <button type="button" class="act" onclick="doAssociate(event,'${esc(s)}')" style="width:auto">Associate</button>
+      </div>
+      <div class="status-line" id="combat-${safe}-assoc-status"></div>
+      <div class="card-divider"></div>
+      <label>Send message to (serial)</label>
+      <input id="combat-${safe}-msg-to" placeholder="Recipient serial">
+      <label>Message</label>
+      <input id="combat-${safe}-msg-content" placeholder="Message text">
+      <button type="button" class="act" onclick="doMessage(event,'${esc(s)}')">Send message</button>
+      <div class="status-line" id="combat-${safe}-msg-status"></div>
+    </div>`;
+  }
+
+  let limitsPane = `<div class="tab-pane" data-tab="limits">
+    <label>Parameter</label>
+    <select id="limits-${safe}-param">
+      <option value="temp">Temperature</option>
+      <option value="humidity">Humidity</option>
+      <option value="light">Light</option>
+      <option value="battery">Battery</option>
+    </select>
+    <div class="field-row">
+      <div><label>Normal min</label><input id="limits-${safe}-normal-min" type="number"></div>
+      <div><label>Normal max (temp only)</label><input id="limits-${safe}-normal-max" type="number"></div>
+    </div>
+    <div class="field-row">
+      <div><label>Warning min</label><input id="limits-${safe}-warning-min" type="number"></div>
+      <div><label>Warning max (temp only)</label><input id="limits-${safe}-warning-max" type="number"></div>
+    </div>
+    <div class="field-hint">Leave all bounds blank to only change the enabled state below.</div>
+    <label>Enabled</label>
+    <input type="hidden" id="limits-${safe}-enabled" value="">
+    <div class="toggle-group" data-target="limits-${safe}-enabled">
+      <button type="button" class="toggle-btn active" data-value="">Unchanged</button>
+      <button type="button" class="toggle-btn enable" data-value="enable">Enable</button>
+      <button type="button" class="toggle-btn disable" data-value="disable">Disable</button>
+    </div>
+    <button type="button" class="act" onclick="doSetLimits(event,'${esc(s)}')">Apply</button>
+    <div class="status-line" id="limits-${safe}-status"></div>
+  </div>`;
+
+  return `<button type="button" class="actions-toggle" onclick="toggleActions('${esc(s)}')">
+      Actions <span class="chevron">▾</span>
+    </button>
+    <div class="actions-panel">
+      ${tabs}
+      ${missionPane}
+      ${combatPane}
+      ${limitsPane}
+    </div>`;
+}
+
+function renderSubmarine(sub) {
+  const badgeClass = sub.assigned ? 'assigned' : 'available';
+  const badgeText = sub.assigned ? 'Assigned' : 'Available';
+  const typeBadgeClass = sub.type === 'Combat' ? 'type-combat' : 'type-research';
+  const safe = cssEscape(sub.serial);
+
+  // Preserve open/closed actions state and active tab across refreshes.
+  const existing = document.getElementById('card-' + safe);
+  const wasOpen = existing && existing.classList.contains('actions-open');
+  const activeTab = existing ? existing.querySelector('.tab-btn.active')?.dataset.tab : null;
+
+  let html = `<div class="card sub-card ${sub.type.toLowerCase()}${wasOpen ? ' actions-open' : ''}" id="card-${safe}">`;
+  html += `<div class="sub-card-head">`;
+  html += `<div class="sub-card-id">`;
+  html += `<div class="name">${esc(sub.name)}</div>`;
+  html += `<div class="serial-row"><span class="serial">${esc(sub.serial)}</span><span class="badge ${typeBadgeClass}">${sub.type}</span></div>`;
+  html += `</div>`;
+  html += `<div class="head-right"><span class="badge ${badgeClass}">${badgeText}</span></div>`;
+  html += `</div>`;
+
+  html += `<div class="card-divider"></div>`;
+
+  html += `<div class="kv-grid">`;
+  if (sub.mission) {
+    html += `<div class="kv"><div class="k">Mission</div><div class="v">${esc(sub.mission.description || '(no description)')}</div></div>`;
+    if (sub.type === 'Combat') {
+      html += `<div class="kv"><div class="k">Commander</div><div class="v">${esc(sub.mission.commanderName || '—')}</div></div>`;
+      html += `<div class="kv"><div class="k">Personnel</div><div class="v">${sub.mission.personnelCount}</div></div>`;
+    } else {
+      html += `<div class="kv"><div class="k">Topic</div><div class="v">${esc(sub.mission.researchTopic || '—')}</div></div>`;
+      html += `<div class="kv"><div class="k">Researchers</div><div class="v">${esc((sub.mission.researcherNames||[]).join(', ') || '—')}</div></div>`;
+    }
+  } else {
+    html += `<div class="kv"><div class="k">Mission</div><div class="v empty">No active mission</div></div>`;
+  }
+  html += `<div class="kv"><div class="k">Past missions</div><div class="v">${sub.missionHistoryCount}</div></div>`;
+
+  html += `<div class="kv"><div class="k">Participating with</div><div class="v${sub.type !== 'Combat' || !(sub.participatingSerials||[]).length ? ' empty' : ''}">`;
+  if (sub.type === 'Combat' && sub.participatingSerials && sub.participatingSerials.length) {
+    html += esc(sub.participatingSerials.join(', '));
+  } else if (sub.type === 'Combat') {
+    html += `none`;
+  } else {
+    html += `n/a (Research)`;
+  }
+  html += `</div></div>`;
+  html += `</div>`; // end kv-grid
+
+  const connClass = sub.connected ? 'connected' : 'disconnected';
+  const connText = sub.connected ? 'Connected' : 'No hardware';
+  html += `<div class="card-divider"></div>`;
+  html += `<div><span class="badge ${connClass}">${connText}</span>`;
+  if (sub.liveSnapshot && sub.liveSnapshot.hasData) {
+    const s = sub.liveSnapshot;
+    html += ` <span class="mode-pill m${s.mode}">${MODE_NAMES[s.mode] || '?'}</span>`;
+  }
+  html += `</div>`;
+
+  if (sub.liveSnapshot && sub.liveSnapshot.hasData) {
+    const s = sub.liveSnapshot;
+    html += `<div class="live-strip">`;
+    html += `<span class="metric">light <b>${s.lightRaw}</b></span>`;
+    html += `<span class="metric">battery <b>${s.batteryRaw}</b></span>`;
+    html += `<span class="metric">temp <b>${s.dhtTemp}&deg;C</b></span>`;
+    html += `<span class="metric">humidity <b>${s.dhtHumidity}%</b></span>`;
+    html += `<span class="event">as of ${esc(s.receivedAtHms)}</span>`;
+    if (s.lastEventDescription) {
+      html += `<span class="event">&middot; last event: ${esc(s.lastEventDescription)} @ ${esc(s.lastEventAtHms)}</span>`;
+    }
+    html += `</div>`;
+  }
+
+  if (sub.type === 'Combat') {
+    html += `<div class="card-divider"></div>`;
+    html += `<div class="kv"><div class="k">Messages received</div>`;
+    if (sub.messages && sub.messages.length) {
+      html += `<div class="msg-list">`;
+      for (const m of sub.messages) {
+        html += `<div class="msg"><div class="from">From ${esc(m.from)}</div>${esc(m.content)}</div>`;
+      }
+      html += `</div>`;
+    } else {
+      html += `<div class="v empty">none</div>`;
+    }
+    html += `</div>`;
+  }
+
+  // Per-submarine actions: assign/update/end mission, associate/message
+  // (combat only), and sensor limits - all scoped to this exact serial,
+  // no manual serial entry needed.
+  html += renderActionsPanel(sub);
+
+  html += `</div>`;
+  return html;
+}
+
+// Lets a just-written status-line message ("Saved"/"Error: ...") stay
+// visible for a beat before the next refresh() call replaces the whole
+// #fleet DOM (and with it, that status-line element). The regular 2s
+// interval still refreshes on its own schedule; this only delays the
+// EXTRA refresh triggered right after a successful action.
+let refreshSoonTimer = null;
+function refreshSoon() {
+  if (refreshSoonTimer) clearTimeout(refreshSoonTimer);
+  refreshSoonTimer = setTimeout(refresh, 900);
+}
+
+async function refresh() {
+  try {
+    const res = await fetch('/api/state');
+    const data = await res.json();
+    lastData = data;
+    const el = document.getElementById('fleet');
+
+    const total = data.submarines.length;
+    const combat = data.submarines.filter(s => s.type === 'Combat').length;
+    const research = data.submarines.filter(s => s.type === 'Research').length;
+    const connected = data.submarines.filter(s => s.connected).length;
+    document.getElementById('stat-total').textContent = total;
+    document.getElementById('stat-combat').textContent = combat;
+    document.getElementById('stat-research').textContent = research;
+    document.getElementById('stat-connected').textContent = connected;
+
+    if (!total) {
+      el.innerHTML = '<div class="card empty-state"><span class="emoji">🌊</span>The fleet is empty &mdash; add a submarine to get started.</div>';
+      return;
+    }
+
+    // Remember which cards have their actions panel open and which tab is
+    // active, so re-rendering every 2s doesn't collapse a form the user is
+    // mid-edit on.
+    const openState = {};
+    document.querySelectorAll('.sub-card').forEach(c => {
+      const activeTab = c.querySelector('.tab-btn.active');
+      openState[c.id] = {
+        open: c.classList.contains('actions-open'),
+        tab: activeTab ? activeTab.dataset.tab : null,
+      };
+    });
+
+    el.innerHTML = data.submarines.map(renderSubmarine).join('');
+    initToggleGroups(el);
+
+    // Restore open/active-tab state after the re-render.
+    Object.keys(openState).forEach(id => {
+      const st = openState[id];
+      const card = document.getElementById(id);
+      if (!card) return;
+      if (st.open) card.classList.add('actions-open');
+      if (st.tab) {
+        const serial = card.querySelector('.serial')?.textContent;
+        if (serial) showTab(serial, st.tab);
+      }
+    });
+  } catch (e) {
+    // server may be mid-restart; just try again on the next tick
+  }
+}
+
+initToggleGroups(document);
+refresh();
+setInterval(refresh, 2000);
+</script>
+</body>
+</html>

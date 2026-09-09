@@ -18,7 +18,6 @@ void CombatSubmarine::printDetails(std::ostream& os) const {
   if (const auto& m = currentMission()) {
     os << "  Commander: " << m->commanderName() << "  Personnel: " << m->personnelCount() << "\n";
   }
-  os << "  Central computer: " << (centralComputer_->isConnected() ? "CONNECTED" : "not connected") << "\n";
   os << "  Participating submarines (" << participatingSubmarineSerials_.size() << "): ";
   for (const auto& s : participatingSubmarineSerials_) os << s << "; ";
   os << "\n";

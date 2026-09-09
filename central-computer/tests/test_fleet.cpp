@@ -100,10 +100,24 @@ static void test_research_and_combat_type_names_and_dynamic_cast() {
   CHECK(fleet.findCombatBySerial("C-3") != nullptr);
 }
 
+// Deliberate extension beyond the spec's literal "belongs to each combat
+// submarine" wording: every submarine, research included, has its own
+// CentralComputer - auto-created on a default loopback transport when the
+// caller doesn't supply one, same as the pre-existing 2-arg construction
+// sites all over this test file keep compiling and working.
+static void test_research_submarine_gets_default_central_computer() {
+  ResearchSubmarine noHardware("R-2", "Curious");
+  CHECK(!noHardware.centralComputer().isConnected());
+
+  ResearchSubmarine withHardware("R-3", "Wired", makeDisconnectedCC("r3"));
+  CHECK(!withHardware.centralComputer().isConnected());  // never opened, but a real object
+}
+
 int main() {
   test_add_and_find_and_duplicate_serial_rejected();
   test_mission_assign_update_end_is_exclusive();
   test_combat_participation_and_messaging();
   test_research_and_combat_type_names_and_dynamic_cast();
+  test_research_submarine_gets_default_central_computer();
   TEST_MAIN_EXIT();
 }

@@ -40,7 +40,8 @@ add_library(central_computer_lib STATIC
   src/menu.cpp
   src/http_server.cpp
   src/dashboard_api.cpp
-  src/dashboard_html.cpp
+  src/tcp_server.cpp
+  src/tcp_api.cpp
 )
 target_include_directories(central_computer_lib PUBLIC include)
 target_link_libraries(central_computer_lib PUBLIC protocol)
@@ -51,6 +52,23 @@ target_link_libraries(central_computer_lib PUBLIC Threads::Threads)
 # --- main app ---------------------------------------------------------------
 add_executable(central_computer src/main.cpp)
 target_link_libraries(central_computer PRIVATE central_computer_lib)
+
+# The dashboard (web/dashboard.html) is read from disk at "web/dashboard.html"
+# relative to whatever directory central_computer is launched from (see
+# main.cpp's loadDashboardHtml() - same convention as the logs/<serial> and
+# data/<serial> paths). Running from central-computer/ (the source tree)
+# picks up the real source file directly - edit it, refresh the browser, no
+# rebuild needed. Running the built exe from its own output directory
+# (build/central-computer/Debug/, per build-and-start.md) needs its own
+# copy of web/ next to it, so copy it there after every build - this copy
+# is a courtesy for that workflow, not the file to edit; edit the one
+# under central-computer/web/ and rebuild to refresh the copy.
+add_custom_command(TARGET central_computer POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+          "${CMAKE_CURRENT_SOURCE_DIR}/web"
+          "$<TARGET_FILE_DIR:central_computer>/web"
+  COMMENT "Copying web/dashboard.html next to the central_computer executable"
+)
 
 # --- tests -------------------------------------------------------------------
 enable_testing()

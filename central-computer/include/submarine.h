@@ -2,10 +2,12 @@
 #define CENTRAL_COMPUTER_SUBMARINE_H
 
 #include <iosfwd>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
 
+#include "central_computer.h"
 #include "mission.h"
 
 namespace submarine {
@@ -15,10 +17,30 @@ namespace submarine {
 // submarine the system must indicate whether it is currently assigned to
 // a mission or available for a new mission." ResearchSubmarine and
 // CombatSubmarine (see their own headers) are the two concrete types.
+//
+// [Deviation from the spec's literal wording, done deliberately at the
+// project owner's request: the spec's OOP Part says the central computer
+// "belongs to each combat submarine". This project instead gives every
+// submarine - research included - its own CentralComputer, so a research
+// submarine can also be wired to real LNC hardware (or, same as most
+// CombatSubmarines in a demo fleet, left on the default loopback
+// transport). CombatSubmarine's own centralComputer() accessors (see
+// combat_submarine.h) are unchanged and just forward to this base-class
+// storage, so none of its existing callers needed to change.]
 class Submarine {
  public:
-  Submarine(std::string serialNumber, std::string name)
-      : serialNumber_(std::move(serialNumber)), name_(std::move(name)) {}
+  // `centralComputer` may be omitted (or explicitly nullptr): a
+  // CentralComputer is auto-created on a default LoopbackTransport under
+  // "logs/<serial>" / "data/<serial>" so every submarine always has one,
+  // whether or not it names real hardware.
+  Submarine(std::string serialNumber, std::string name,
+            std::unique_ptr<CentralComputer> centralComputer = nullptr)
+      : serialNumber_(std::move(serialNumber)),
+        name_(std::move(name)),
+        centralComputer_(centralComputer
+                              ? std::move(centralComputer)
+                              : std::make_unique<CentralComputer>("logs/" + serialNumber_,
+                                                                   "data/" + serialNumber_)) {}
   virtual ~Submarine() = default;
 
   Submarine(const Submarine&) = delete;
@@ -44,6 +66,12 @@ class Submarine {
   // assigned.
   bool endMission();
 
+  // Every submarine - research or combat - has its own CentralComputer
+  // (see the class comment above for why this is broader than the spec's
+  // literal wording).
+  CentralComputer& centralComputer() { return *centralComputer_; }
+  const CentralComputer& centralComputer() const { return *centralComputer_; }
+
   // A short, human-readable type label ("Research" / "Combat") used by
   // Menu for display and by operations that need to branch on type
   // without an explicit dynamic_cast at the call site.
@@ -59,6 +87,7 @@ class Submarine {
   std::string name_;
   std::optional<Mission> currentMission_;
   std::vector<Mission> missionHistory_;
+  std::unique_ptr<CentralComputer> centralComputer_;
 };
 
 }  // namespace submarine

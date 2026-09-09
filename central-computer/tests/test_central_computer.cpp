@@ -18,6 +18,19 @@ using namespace submarine;
 using submarine::proto::MessageBuilder;
 using submarine::proto::MessageDecoder;
 
+// Set by fakeLncThread when it decodes a real MSG_TYPE_CMD_SET_LIMITS from
+// ManagementCommand::setLimits() - checked by the test only after the fake
+// thread is joined, so no extra synchronization is needed.
+struct LastSetLimitsSeen {
+  bool seen = false;
+  uint8_t param = 0xFF;
+  bool haveEnabled = false;
+  uint8_t enabled = 0xFF;
+  bool haveNormalMin = false;
+  int32_t normalMin = 0;
+};
+static LastSetLimitsSeen g_lastSetLimits;
+
 static void fakeLncThread(LoopbackTransport& transport, std::atomic<bool>& stop) {
   MessageDecoder decoder;
   bool pushedUnsolicited = false;
@@ -40,6 +53,25 @@ static void fakeLncThread(LoopbackTransport& transport, std::atomic<bool>& stop)
     if (bytes.empty()) continue;
     for (const auto& msg : decoder.feed(bytes)) {
       if (msg.type == MSG_TYPE_CMD_SET_TIME) {
+        MessageBuilder ack;
+        ack.u8(TAG_STATUS, STATUS_OK);
+        transport.feedIncoming(ack.encode(MSG_TYPE_ACK));
+      } else if (msg.type == MSG_TYPE_CMD_SET_LIMITS) {
+        // Plays the firmware's decoder role for real (see comm_tags.h /
+        // app_command.c's HandleSetLimits) - proves ManagementCommand's
+        // wire encoding of the new TAG_ENABLED field round-trips
+        // correctly, same spirit as the rest of this test's real
+        // MessageBuilder/MessageDecoder/TLV usage.
+        g_lastSetLimits.seen = true;
+        if (auto p = msg.find(TAG_PARAM)) g_lastSetLimits.param = p->asU8().value_or(0xFF);
+        if (auto e = msg.find(TAG_ENABLED)) {
+          g_lastSetLimits.haveEnabled = true;
+          g_lastSetLimits.enabled = e->asU8().value_or(0xFF);
+        }
+        if (auto nmin = msg.find(TAG_NORMAL_MIN)) {
+          g_lastSetLimits.haveNormalMin = true;
+          g_lastSetLimits.normalMin = nmin->asI32().value_or(0);
+        }
         MessageBuilder ack;
         ack.u8(TAG_STATUS, STATUS_OK);
         transport.feedIncoming(ack.encode(MSG_TYPE_ACK));
@@ -69,6 +101,28 @@ static void test_central_computer_end_to_end() {
 
   TimeStamp ts{2026, 9, 5, 22, 0, 0};
   CHECK(cc.commands().setTime(ts, 1000));
+
+  // TAG_ENABLED round trip (deliberate extension beyond the spec, added at
+  // the project owner's explicit request): an enabled-only command (no
+  // limit fields at all) still reaches the far side with just TAG_PARAM +
+  // TAG_ENABLED set - real MessageBuilder/MessageDecoder/TLV code, same as
+  // everything else in this test.
+  CHECK(cc.commands().setLimits(PARAM_BATTERY, std::nullopt, std::nullopt, std::nullopt, std::nullopt, false, 1000));
+  CHECK(g_lastSetLimits.seen);
+  CHECK(g_lastSetLimits.param == PARAM_BATTERY);
+  CHECK(g_lastSetLimits.haveEnabled);
+  CHECK(g_lastSetLimits.enabled == 0);
+  CHECK(!g_lastSetLimits.haveNormalMin);  // limits untouched by this command
+
+  // Combined: real limits and TAG_ENABLED together in one command.
+  g_lastSetLimits = LastSetLimitsSeen{};
+  CHECK(cc.commands().setLimits(PARAM_LIGHT, 500, std::nullopt, 120, std::nullopt, true, 1000));
+  CHECK(g_lastSetLimits.seen);
+  CHECK(g_lastSetLimits.param == PARAM_LIGHT);
+  CHECK(g_lastSetLimits.haveEnabled);
+  CHECK(g_lastSetLimits.enabled == 1);
+  CHECK(g_lastSetLimits.haveNormalMin);
+  CHECK(g_lastSetLimits.normalMin == 500);
 
   stop = true;
   fake.join();

@@ -5,13 +5,15 @@ namespace submarine {
 bool ManagementCommand::setLimits(uint8_t param, std::optional<int32_t> normalMin,
                                    std::optional<int32_t> normalMax,
                                    std::optional<int32_t> warningMin,
-                                   std::optional<int32_t> warningMax, int timeoutMs) {
+                                   std::optional<int32_t> warningMax,
+                                   std::optional<bool> enabled, int timeoutMs) {
   proto::MessageBuilder b;
   b.u8(TAG_PARAM, param);
   if (normalMin) b.i32(TAG_NORMAL_MIN, *normalMin);
   if (normalMax) b.i32(TAG_NORMAL_MAX, *normalMax);
   if (warningMin) b.i32(TAG_WARNING_MIN, *warningMin);
   if (warningMax) b.i32(TAG_WARNING_MAX, *warningMax);
+  if (enabled) b.u8(TAG_ENABLED, *enabled ? 1 : 0);
 
   auto reply = link_.sendAndWait(b.encode(MSG_TYPE_CMD_SET_LIMITS), timeoutMs);
   if (!reply || reply->type != MSG_TYPE_ACK) return false;

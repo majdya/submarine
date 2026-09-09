@@ -192,6 +192,20 @@ static void test_dashboard_http_layer() {
   CHECK(contains(bodyOf(resp), R"("assigned":false)"));
   CHECK(contains(bodyOf(resp), R"("missionHistoryCount":1)"));
 
+  // A research submarine now also gets its own CentralComputer (a
+  // deliberate extension beyond the spec's literal "belongs to each
+  // combat submarine" wording) - it should report a "connected" field and
+  // a liveSnapshot just like a combat submarine, but no participating/
+  // messages fields.
+  resp = rawHttpRequest(kTestPort, "POST", "/api/submarines", "type=research&serial=R-1&name=Beagle&port=");
+  CHECK(contains(bodyOf(resp), R"("ok":true)"));
+  resp = rawHttpRequest(kTestPort, "GET", "/api/state");
+  stateBody = bodyOf(resp);
+  CHECK(contains(stateBody, R"("serial":"R-1")"));
+  CHECK(contains(stateBody, R"("type":"Research")"));
+  CHECK(contains(stateBody, R"("connected":false)"));
+  CHECK(contains(stateBody, R"("participatingSerials":[])"));
+
   // Unknown route -> 404, server still healthy afterwards.
   resp = rawHttpRequest(kTestPort, "GET", "/nope");
   CHECK(resp.rfind("HTTP/1.1 404", 0) == 0);

@@ -6,8 +6,10 @@
 
 namespace submarine {
 
-Submarine* Menu::addResearchSubmarine(std::string serial, std::string name) {
-  return fleet_.addSubmarine(std::make_unique<ResearchSubmarine>(std::move(serial), std::move(name)));
+Submarine* Menu::addResearchSubmarine(std::string serial, std::string name,
+                                       std::unique_ptr<CentralComputer> centralComputer) {
+  return fleet_.addSubmarine(
+      std::make_unique<ResearchSubmarine>(std::move(serial), std::move(name), std::move(centralComputer)));
 }
 
 Submarine* Menu::addCombatSubmarine(std::string serial, std::string name,

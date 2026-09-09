@@ -32,9 +32,17 @@ class ManagementCommand {
   // param: PARAM_TEMP/PARAM_HUMIDITY/PARAM_LIGHT/PARAM_BATTERY (comm_tags.h).
   // normalMax/warningMax only apply to PARAM_TEMP (see comm_tags.h) - pass
   // std::nullopt for the other three parameters.
+  //
+  // `enabled`: optional TAG_ENABLED (deliberate extension beyond the spec,
+  // added at the project owner's explicit request) - enable/disable this
+  // parameter's contribution to the LNC's overall Operating Mode, without
+  // touching its limits. Pass std::nullopt to leave the enabled state
+  // unchanged (the original, pre-existing behavior); pass a value with
+  // every limit field as std::nullopt to toggle enabled/disabled alone,
+  // or combine both in one call.
   bool setLimits(uint8_t param, std::optional<int32_t> normalMin, std::optional<int32_t> normalMax,
                  std::optional<int32_t> warningMin, std::optional<int32_t> warningMax,
-                 int timeoutMs = 2000);
+                 std::optional<bool> enabled = std::nullopt, int timeoutMs = 2000);
 
   bool setTime(const TimeStamp& ts, int timeoutMs = 2000);
   std::optional<TimeStamp> getTime(int timeoutMs = 2000);
