@@ -84,6 +84,7 @@ Keep on the shared Arduino/Uno header (no rewiring needed — these don't confli
 | LM35 (temp, if used alongside/instead of DHT11) | A2 / `PA4` | `ADC1_IN9` |
 | Push Button 1 | D2 / `PA10` | GPIO EXTI, pull-up, active low |
 | Push Button 2 | D3 / `PB3` | GPIO EXTI, pull-up, active low |
+| IR receiver (9-in-1 shield) | D6 / `PB10` | GPIO input, pull-up, **polled** (not EXTI - see §8) |
 | DHT11 data | D4 / `PB5` | GPIO bit-banged |
 | Buzzer | D5 / `PB4` | `TIM3_CH1` PWM |
 | RGB Red | D9 / `PC7` | `TIM3_CH2` PWM (corrected from the earlier PB0/CH3 error) |
@@ -106,7 +107,7 @@ Rewired via jumper leads to the Morpho header (CN10) to escape the SPI/I2C confl
 
 **Correction (2026-09-03):** an earlier version of this table put RGB Green on `PC6`/`TIM3_CH1` — but the buzzer (D5/`PB4`) already occupies `TIM3_CH1`. Both pins are valid alternate-function options *for the same channel*, so they'd have been forced to share one identical PWM waveform (Green's brightness tied to the buzzer's tone/duty) rather than being independently controllable. Moved Green to `TIM3_CH3` (`PC8`) and Blue to `TIM3_CH4` (`PB1`) instead, so Buzzer=CH1, Red=CH2, Green=CH3, Blue=CH4 — four genuinely independent channels, all still on one TIM3 instance.
 
-Still unassigned, to be settled once the object-detection sensor is chosen: IR receiver (originally D6/`PB10`), Extra Digital Header D7/`PA8` and D8/`PA9` (Echo/Trig candidates), spare analog A3/`PB0`.
+Still unassigned: Extra Digital Header D7/`PA8` and D8/`PA9` (Echo/Trig candidates), spare analog A3/`PB0`. IR receiver (D6/`PB10`) is now assigned - see §8.
 
 **DS1307 shield voltage — confirmed safe (2026-09-03).** The specific shield in use is spec'd for a stable 3.3V output/logic level ("3.3V Output Voltage Compatibility... safe and reliable performance with low-voltage microcontrollers"), so its I2C pull-ups reference 3.3V rather than 5V — the earlier caution about over-volting PC0/PC1 doesn't apply here. Still confirm the shield is actually powered from the Nucleo's 3V3 pin (not 5V) per its documentation, since a 3.3V-logic shield typically expects a 3.3V supply rail too, not just 3.3V-safe I/O.
 
@@ -127,4 +128,16 @@ No ultrasonic sensor, dedicated IR-obstacle module, or spare IR LED emitter is a
 
 **Decision:** repurpose **Push Button 2 (D3 / `PB3`)** as a manual object-detected/object-cleared toggle. The spec only requires one physical button (silencing the alarm, already Button 1 / D2 / `PA10`) — Button 2 has no assigned role otherwise, so this costs no extra hardware and no pin changes. The Object Detection module still exposes the same detected/cleared interface to Event/Communication either way; only the physical trigger is a button press instead of a real distance/IR reading. Worth a line in the project write-up noting this is a simulated input due to hardware constraints.
 
-IR receiver (D6) and Extra Digital Header D7/D8 remain unused for now — free for anything else that comes up, or simply left unpopulated.
+Extra Digital Header D7/D8 remain unused for now — free for anything else that comes up, or simply left unpopulated. The IR receiver (D6) itself was later put to use after all, alongside this button - see §8.
+
+---
+
+## 8. IR receiver (D6) — added later as a second, real object-detection input (2026-09-07)
+
+§7's Button 2 stand-in stays in place (still the only *manual* trigger available for the demo/grading), but the 9-in-1 shield's onboard IR receiver was also wired in as a genuine sensor input once the beep-on-detect requirement made it worth the effort, without needing any new hardware or rewiring.
+
+**Why polled, not interrupt-driven.** D6/`PB10` and Push Button 1 (D2/`PA10`, Silence) land on the same STM32 EXTI line number (line 10) — the L4's EXTI mux can only route one GPIO *port* to a given line number at a time, so configuring PB10 as `GPIO_MODE_IT_FALLING` would silently steal Silence's interrupt. Rather than rewire the shield to a free pin, `PB10` is configured as a plain `GPIO_MODE_INPUT`/`GPIO_PULLUP` and polled by a new dedicated FreeRTOS task, `Task_IrDetect` (`Core/Src/app/tasks/task_ir_detect.c`), on the same one-task-per-module pattern as the rest of the firmware — every 20ms, active-low (idle HIGH, pulled LOW while the receiver sees a modulated IR carrier, same convention as both push buttons).
+
+**Debounce/hysteresis.** A cheap IR receiver's output isn't one clean edge — it's a burst of demodulated pulses lasting tens of milliseconds per transmission. `Task_IrDetect` posts `EVENT_OBJECT_DETECTED` on the first active read, then only posts `EVENT_OBJECT_CLEARED` once the pin has read idle continuously for 400ms, so the natural gaps between pulses within one burst never get misread as the object leaving and coming back.
+
+**No changes needed downstream.** Both the button stand-in (§7) and the new IR task post into the exact same `AppEvent_Post(EVENT_OBJECT_DETECTED/CLEARED, ...)` pipeline that `task_event.c` already handles (RGB red + buzzer alarm on detect, RGB green + alarm-off on clear) — so the "beep" behavior requested for the IR sensor was already implemented and needed no new alarm logic, only this new event source.
