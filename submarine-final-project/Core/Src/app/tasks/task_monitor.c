@@ -24,7 +24,7 @@ static AppMode_t ClassifyTemp(const AppConfig_t *cfg, int32_t temp_c) {
 }
 
 static AppMode_t ClassifyLowerBound(uint32_t value, uint32_t normal_lower,
-                                     uint32_t warning_lower) {
+                                    uint32_t warning_lower) {
   if (value >= normal_lower) {
     return APP_MODE_NORMAL;
   }
@@ -34,9 +34,7 @@ static AppMode_t ClassifyLowerBound(uint32_t value, uint32_t normal_lower,
   return APP_MODE_ERROR;
 }
 
-static AppMode_t WorstMode(AppMode_t a, AppMode_t b) {
-  return (b > a) ? b : a;
-}
+static AppMode_t WorstMode(AppMode_t a, AppMode_t b) { return (b > a) ? b : a; }
 
 void Task_Monitor(void *argument) {
   (void)argument;
@@ -48,6 +46,8 @@ void Task_Monitor(void *argument) {
   static uint8_t s_dht_valid = 0;
   static uint8_t s_dht_humidity = 0;
   static uint8_t s_dht_temp = 0;
+
+  static uint8_t s_first_classification = 1;
 
   AppMode_t previous_mode = APP_MODE_NORMAL;
 
@@ -94,19 +94,19 @@ void Task_Monitor(void *argument) {
       }
       if (cfg.humidity_enabled) {
         mode = WorstMode(mode, ClassifyLowerBound(s_dht_humidity,
-                                                   cfg.humidity_normal_lower,
-                                                   cfg.humidity_warning_lower));
+                                                  cfg.humidity_normal_lower,
+                                                  cfg.humidity_warning_lower));
       }
     }
     if (cfg.light_enabled) {
       mode = WorstMode(mode, ClassifyLowerBound(readings.light_raw,
-                                                 cfg.light_normal_lower,
-                                                 cfg.light_warning_lower));
+                                                cfg.light_normal_lower,
+                                                cfg.light_warning_lower));
     }
     if (cfg.battery_enabled) {
       mode = WorstMode(mode, ClassifyLowerBound(readings.battery_raw,
-                                                 cfg.battery_normal_lower,
-                                                 cfg.battery_warning_lower));
+                                                cfg.battery_normal_lower,
+                                                cfg.battery_warning_lower));
     }
     readings.mode = mode;
 
@@ -117,12 +117,11 @@ void Task_Monitor(void *argument) {
        values" - only on an actual change, not every poll. Task_Event
        reads the just-published AppState itself (light/temp/battery/dht)
        rather than this event carrying a second copy of the readings. */
-    if (mode != previous_mode) {
+    if (mode != previous_mode || s_first_classification) {
+      s_first_classification = 0;
       AppEvent_Post(EVENT_MODE_CHANGED,
                     APP_EVENT_PACK_MODE_CHANGE(previous_mode, mode));
       previous_mode = mode;
     }
-
-    osDelay(cfg.monitor_period_ms);
   }
 }
