@@ -21,6 +21,11 @@ class GroundStationCli {
   // Returns false on fatal errors (e.g., connection lost).
   bool run();
 
+  // Exposes the underlying TcpClient so main() can also wire up the
+  // read-only web dashboard's HTTP routes against the same connection
+  // (TcpClient::sendRequest() is mutex-protected for exactly this reason).
+  TcpClient& client() { return *client_; }
+
  private:
   void printMenu() const;
   bool handleListSubmarines();

@@ -1,8 +1,9 @@
 #ifndef GROUND_STATION_TCP_CLIENT_H
 #define GROUND_STATION_TCP_CLIENT_H
 
-#include <string>
 #include <memory>
+#include <mutex>
+#include <string>
 
 namespace ground_station {
 
@@ -38,6 +39,10 @@ class TcpClient {
 
   // Sends a request and reads the response.
   // Returns the JSON response body as a string, or empty string on error.
+  // Thread-safe: locks an internal mutex around the whole request/response
+  // exchange, since this one socket is now shared between the console CLI
+  // (main thread) and the read-only web dashboard's HTTP handlers
+  // (HttpServer's own accept thread) - see main.cpp.
   std::string sendRequest(const std::string& command);
 
   // Disconnects from the server.
@@ -48,6 +53,7 @@ class TcpClient {
  private:
   std::string readUntilTerminator();  // Reads until "\n.\n"
 
+  std::mutex mutex_;
   std::string host_;
   int port_;
   std::string errorMessage_;

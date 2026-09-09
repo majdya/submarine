@@ -97,6 +97,7 @@ bool TcpClient::isConnected() const {
 }
 
 std::string TcpClient::sendRequest(const std::string& command) {
+  std::lock_guard<std::mutex> lock(mutex_);
   if (!isConnected()) {
     errorMessage_ = "Not connected";
     return "";

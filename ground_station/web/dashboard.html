@@ -1,0 +1,206 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Ground Station Dashboard</title>
+<style>
+  :root { color-scheme: dark; }
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; background: #0b1420; color: #dce6f0;
+         margin: 0; padding: 24px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: #7d93a8; font-size: 13px; margin-bottom: 20px; }
+  .readonly-badge { display: inline-block; background: #1f3a52; color: #7fc4f0; font-size: 11px;
+         padding: 2px 8px; border-radius: 999px; margin-left: 8px; vertical-align: middle; }
+  .layout { display: grid; grid-template-columns: 1fr 340px; gap: 20px; align-items: start; }
+  .card { background: #101d2c; border: 1px solid #1e3348; border-radius: 10px; padding: 16px; margin-bottom: 14px; }
+  .sub-card { border-left: 4px solid #3a5a78; }
+  .sub-card.combat { border-left-color: #c0703a; }
+  .sub-card.research { border-left-color: #3a8fc0; }
+  .row { display: flex; justify-content: space-between; align-items: baseline; }
+  .name { font-weight: 600; font-size: 16px; }
+  .serial { color: #7d93a8; font-size: 12px; }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; }
+  .badge.assigned { background: #2e4a2e; color: #9be09b; }
+  .badge.available { background: #2a2a2a; color: #aaa; }
+  .badge.connected { background: #1f3a52; color: #7fc4f0; }
+  .badge.disconnected { background: #3a2a2a; color: #c98a8a; }
+  .detail { font-size: 13px; color: #b7c6d4; margin-top: 8px; line-height: 1.6; }
+  .detail b { color: #dce6f0; }
+  .row-line { font-size: 12px; background: #0b1622; border-radius: 6px; padding: 6px 10px; margin-top: 4px;
+         font-family: ui-monospace, Consolas, monospace; }
+  form.inline { margin-top: 4px; }
+  input, select, button { background: #0b1622; color: #dce6f0; border: 1px solid #2a4054; border-radius: 6px;
+         padding: 7px 9px; font-size: 13px; margin: 3px 0; width: 100%; box-sizing: border-box; }
+  button { background: #1f4a6b; cursor: pointer; font-weight: 600; }
+  button:hover { background: #285f88; }
+  label { font-size: 11px; color: #7d93a8; display: block; margin-top: 8px; }
+  .status-line { font-size: 12px; min-height: 16px; margin-top: 6px; }
+  .status-line.ok { color: #9be09b; }
+  .status-line.err { color: #e09b9b; }
+  .empty { color: #7d93a8; font-size: 13px; }
+  .results { max-height: 260px; overflow-y: auto; margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<h1>Ground Station Dashboard <span class="readonly-badge">READ-ONLY</span></h1>
+<div class="sub">
+  Browser-based view of exactly what the console CLI can already see (spec &sect;4: log data and event
+  data for a date range, from the submarine's Central Computer) - a second interface, not a new
+  capability. The console menu still works independently against the same connection.
+</div>
+
+<div class="layout">
+  <div>
+    <div class="card">
+      <b>Fleet (from LIST_SUBMARINES)</b>
+      <div id="fleet"></div>
+    </div>
+
+    <div class="card">
+      <b>Summary report</b>
+      <button onclick="loadSummary()">Refresh summary</button>
+      <div id="summary" class="detail"></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="card">
+      <b>Get logs</b>
+      <form class="inline" onsubmit="return doGetLogs(event)">
+        <label>Submarine serial</label>
+        <input id="logs-serial" required>
+        <label>Start date (YYYYMMDD)</label>
+        <input id="logs-start" required placeholder="20260901">
+        <label>End date (YYYYMMDD)</label>
+        <input id="logs-end" required placeholder="20260908">
+        <button type="submit">Query logs</button>
+        <div class="status-line" id="logs-status"></div>
+      </form>
+      <div id="logs-results" class="results"></div>
+    </div>
+
+    <div class="card">
+      <b>Get events</b>
+      <form class="inline" onsubmit="return doGetEvents(event)">
+        <label>Submarine serial</label>
+        <input id="events-serial" required>
+        <label>Start date (YYYYMMDD)</label>
+        <input id="events-start" required placeholder="20260901">
+        <label>End date (YYYYMMDD)</label>
+        <input id="events-end" required placeholder="20260908">
+        <button type="submit">Query events</button>
+        <div class="status-line" id="events-status"></div>
+      </form>
+      <div id="events-results" class="results"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const MODE_NAMES = ['NORMAL', 'WARNING', 'ERROR'];
+const EVENT_NAMES = ['?', 'OBJECT_DETECTED', 'OBJECT_CLEARED', 'SILENCE_PRESSED', 'MODE_CHANGED'];
+
+async function getJson(path) {
+  try {
+    const res = await fetch(path);
+    return await res.json();
+  } catch (e) {
+    return { status: 'error', data: String(e) };
+  }
+}
+
+function setStatus(elId, result) {
+  const el = document.getElementById(elId);
+  if (result.status === 'ok') {
+    el.textContent = 'OK';
+    el.className = 'status-line ok';
+  } else {
+    el.textContent = 'Error: ' + result.data;
+    el.className = 'status-line err';
+  }
+}
+
+function renderSubmarine(sub) {
+  const badgeClass = sub.missionAssigned ? 'assigned' : 'available';
+  const badgeText = sub.missionAssigned ? 'ASSIGNED' : 'AVAILABLE';
+  const connClass = sub.connected ? 'connected' : 'disconnected';
+  const connText = sub.connected ? 'CONNECTED' : 'no hardware';
+  let html = `<div class="card sub-card ${sub.type.toLowerCase()}">`;
+  html += `<div class="row"><span class="name">${sub.name}</span><span class="badge ${badgeClass}">${badgeText}</span></div>`;
+  html += `<div class="serial">${sub.serial} - ${sub.type}</div>`;
+  if (sub.missionAssigned) {
+    html += `<div class="detail"><b>Mission:</b> ${sub.missionDescription || '(no description)'}</div>`;
+  }
+  html += `<div class="detail"><span class="badge ${connClass}">${connText}</span></div>`;
+  html += `</div>`;
+  return html;
+}
+
+async function loadFleet() {
+  const result = await getJson('/api/submarines');
+  const el = document.getElementById('fleet');
+  if (result.status !== 'ok') {
+    el.innerHTML = `<div class="empty">Error: ${result.data}</div>`;
+    return;
+  }
+  if (!result.data.length) {
+    el.innerHTML = '<div class="empty">No submarines in the fleet.</div>';
+    return;
+  }
+  el.innerHTML = result.data.map(renderSubmarine).join('');
+}
+
+async function loadSummary() {
+  const result = await getJson('/api/summary');
+  const el = document.getElementById('summary');
+  if (result.status !== 'ok') {
+    el.innerHTML = `<span class="empty">Error: ${result.data}</span>`;
+    return;
+  }
+  const d = result.data;
+  el.innerHTML = `Total: <b>${d.totalSubmarines}</b> &middot; Combat: <b>${d.combat}</b> &middot; `
+               + `Research: <b>${d.research}</b> &middot; Active missions: <b>${d.activeMissions}</b>`;
+}
+
+async function doGetLogs(ev) {
+  ev.preventDefault();
+  const serial = document.getElementById('logs-serial').value;
+  const start = document.getElementById('logs-start').value;
+  const end = document.getElementById('logs-end').value;
+  const result = await getJson(`/api/logs?serial=${encodeURIComponent(serial)}&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`);
+  setStatus('logs-status', result);
+  const resultsEl = document.getElementById('logs-results');
+  if (result.status !== 'ok') { resultsEl.innerHTML = ''; return false; }
+  if (!result.data.length) { resultsEl.innerHTML = '<div class="empty">No log records in that range.</div>'; return false; }
+  resultsEl.innerHTML = result.data.map(r =>
+    `<div class="row-line">${r.ymd} ${r.hms} ${MODE_NAMES[r.mode] || '?'} light=${r.lightRaw} `
+    + `tempADC=${r.tempAdcRaw} batt=${r.batteryRaw} dht=${r.dhtTemp}&deg;C/${r.dhtHumidity}%`
+    + `${r.dhtValid ? '' : ' (dht invalid)'}</div>`
+  ).join('');
+  return false;
+}
+
+async function doGetEvents(ev) {
+  ev.preventDefault();
+  const serial = document.getElementById('events-serial').value;
+  const start = document.getElementById('events-start').value;
+  const end = document.getElementById('events-end').value;
+  const result = await getJson(`/api/events?serial=${encodeURIComponent(serial)}&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`);
+  setStatus('events-status', result);
+  const resultsEl = document.getElementById('events-results');
+  if (result.status !== 'ok') { resultsEl.innerHTML = ''; return false; }
+  if (!result.data.length) { resultsEl.innerHTML = '<div class="empty">No events in that range.</div>'; return false; }
+  resultsEl.innerHTML = result.data.map(r =>
+    `<div class="row-line">${r.ymd} ${r.hms} ${EVENT_NAMES[r.eventType] || '?'} value=${r.eventValue} `
+    + `mode=${MODE_NAMES[r.mode] || '?'}</div>`
+  ).join('');
+  return false;
+}
+
+loadFleet();
+loadSummary();
+setInterval(loadFleet, 2000);
+</script>
+</body>
+</html>
