@@ -57,6 +57,52 @@ _Last updated: 2026-09-09_
         `central_computer.exe` (or a browser refresh if it was already
         running from the source directory for live editing).
 
+- [x] **Fixed: typing in a per-card action field got wiped by the 2s
+      auto-refresh, 2026-09-09** (project owner's explicit bug report:
+      "it seems when i try to type and fill the card for a submarine,
+      for action for example card refreshes on incoming message"):
+      - Root cause: the dashboard's `refresh()` fully rebuilds every
+        submarine card's HTML from the API response every 2 seconds
+        (`el.innerHTML = ...`). The previous "preserve state across
+        refresh" logic only remembered a card's open/closed
+        actions-panel state and active tab - it never captured or
+        restored the actual values typed into that card's form fields,
+        since the fields themselves were torn down and recreated fresh
+        on every tick regardless of whether the user was mid-edit.
+      - Fix: `refresh()` now identifies whichever `.sub-card` currently
+        contains the focused element (`document.activeElement`) and
+        treats it as "pinned" - every other card's HTML is rebuilt as
+        before, but the pinned card's actual live DOM node is moved
+        into the rebuilt fleet list untouched, so nothing inside it
+        (typed text, cursor position, selection) is ever destroyed.
+      - This needed care: simply moving a DOM node (even back into the
+        same document) fires a `blur` event on any focused descendant
+        first, and focus isn't restored automatically afterward. The
+        fix explicitly remembers which field had focus and its
+        selection range before the move, then calls `.focus()` and
+        `.setSelectionRange()` on it again right after - so the caret
+        position is preserved too, not just the text.
+      - The "pin by current focus" approach (rather than "pin by
+        actions-open") was a deliberate choice: it means a card the
+        user has simply left open (not currently typing in) still
+        refreshes normally - so a just-assigned mission's details still
+        appear on the card right after a successful save, exactly as
+        before. Only the specific card - and specific instant - where
+        the user is actually mid-keystroke is ever exempted from the
+        refresh cycle.
+      - Verified with Playwright against the real running binary:
+        typed into a per-card Mission-description field and held focus
+        there through three full 2-second auto-refresh ticks (6+
+        seconds), confirming the typed text and the actions-open state
+        both survived untouched on every tick; then confirmed the
+        existing "Saved" status flow and "mission appears on the card
+        after refresh" behavior still both work correctly; then
+        confirmed an unrelated new submarine's card still renders and
+        updates normally while another card is pinned.
+      - Purely a `central-computer/web/dashboard.html` change - no
+        rebuild needed, only a restart of `central_computer.exe` (or a
+        browser refresh if already running from the source directory).
+
 
 - [x] **Console UX change 2026-09-08, by operator request:** every fixed-set
       console choice is now a numbered menu instead of a typed word -

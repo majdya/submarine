@@ -685,9 +685,30 @@ async function refresh() {
       return;
     }
 
+    // A card the user is actively typing into (focus currently inside one
+    // of its inputs/selects) must keep its EXACT LIVE DOM NODE - not just
+    // the same HTML - because re-parsing via innerHTML always creates a
+    // brand-new element (losing focus) and an <input>'s live, in-progress
+    // .value only exists as a DOM property, not in its outerHTML/markup.
+    // So a re-render of the whole #fleet container is never safe for the
+    // pinned card; instead we diff at the top level: rebuild every OTHER
+    // card as fresh HTML via a detached wrapper, then splice those in
+    // around the pinned card's untouched live node, without ever calling
+    // innerHTML on #fleet itself (which would tear down every child).
+    const active = document.activeElement;
+    const pinnedCard = active ? active.closest('.sub-card') : null;
+    const pinnedId = pinnedCard ? pinnedCard.id : null;
+    // Moving a DOM node (even back into the same document) always fires a
+    // blur on any focused descendant first - it is not restored
+    // automatically - so remember exactly what had focus, and the cursor
+    // position/selection if it was a text input, to restore after the move.
+    const pinnedFocusId = pinnedId && active && active.id ? active.id : null;
+    const pinnedSelStart = pinnedFocusId && 'selectionStart' in active ? active.selectionStart : null;
+    const pinnedSelEnd = pinnedFocusId && 'selectionEnd' in active ? active.selectionEnd : null;
+
     // Remember which cards have their actions panel open and which tab is
-    // active, so re-rendering every 2s doesn't collapse a form the user is
-    // mid-edit on.
+    // active, so re-rendering doesn't collapse a form the user has open
+    // but isn't currently typing in.
     const openState = {};
     document.querySelectorAll('.sub-card').forEach(c => {
       const activeTab = c.querySelector('.tab-btn.active');
@@ -697,11 +718,44 @@ async function refresh() {
       };
     });
 
-    el.innerHTML = data.submarines.map(renderSubmarine).join('');
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = data.submarines.map(sub => {
+      const id = 'card-' + cssEscape(sub.serial);
+      if (id === pinnedId) {
+        // Placeholder - swapped back out for the real live node below.
+        return `<div id="__pinned_placeholder__"></div>`;
+      }
+      return renderSubmarine(sub);
+    }).join('');
+
+    if (pinnedId) {
+      const placeholder = wrapper.querySelector('#__pinned_placeholder__');
+      const liveNode = document.getElementById(pinnedId);
+      if (placeholder && liveNode) {
+        placeholder.replaceWith(liveNode); // moves the real node, focus & all
+      }
+    }
+
+    el.replaceChildren(...wrapper.childNodes);
     initToggleGroups(el);
 
-    // Restore open/active-tab state after the re-render.
+    // The move above blurred whatever was focused inside the pinned card
+    // (its value/content is untouched, only focus itself was dropped) -
+    // put focus and the caret position back exactly where they were.
+    if (pinnedFocusId) {
+      const refocus = document.getElementById(pinnedFocusId);
+      if (refocus) {
+        refocus.focus();
+        if (pinnedSelStart !== null && pinnedSelEnd !== null) {
+          try { refocus.setSelectionRange(pinnedSelStart, pinnedSelEnd); } catch (e) {}
+        }
+      }
+    }
+
+    // Restore open/active-tab state on every card except the pinned one
+    // (which was never touched, so it already has its own state intact).
     Object.keys(openState).forEach(id => {
+      if (id === pinnedId) return;
       const st = openState[id];
       const card = document.getElementById(id);
       if (!card) return;
