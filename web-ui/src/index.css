@@ -1,0 +1,66 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Dark-first design tokens (this app has one look, no light theme). */
+    --background: 210 45% 5%;
+    --foreground: 205 40% 92%;
+
+    --card: 210 38% 9%;
+    --card-foreground: 205 40% 92%;
+
+    --popover: 210 38% 9%;
+    --popover-foreground: 205 40% 92%;
+
+    --primary: 205 90% 60%;
+    --primary-foreground: 210 45% 8%;
+
+    --secondary: 210 30% 16%;
+    --secondary-foreground: 205 40% 92%;
+
+    --muted: 210 30% 14%;
+    --muted-foreground: 205 20% 62%;
+
+    --accent: 210 30% 16%;
+    --accent-foreground: 205 40% 92%;
+
+    --destructive: 4 70% 55%;
+    --destructive-foreground: 210 45% 96%;
+
+    --border: 210 25% 18%;
+    --input: 210 25% 18%;
+    --ring: 205 90% 60%;
+
+    --radius: 0.75rem;
+
+    /* Domain tokens, carried over from the previous dashboard's palette. */
+    --combat: 22 75% 55%;
+    --combat-soft: 22 60% 18%;
+    --research: 205 80% 58%;
+    --research-soft: 205 55% 16%;
+    --good: 142 55% 55%;
+    --good-soft: 142 45% 15%;
+    --warn: 40 85% 58%;
+    --warn-soft: 40 60% 16%;
+    --bad: 4 75% 60%;
+    --bad-soft: 4 55% 16%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* Mobile-first: avoid iOS zoom-on-focus for inputs under 16px. */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
