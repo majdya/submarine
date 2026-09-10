@@ -1,17 +1,18 @@
-# Unrelated coursework (not part of the final project)
-/c/
-/cpp/
-/embd/
+# Archived coursework — lecture recordings, slides, old exercises.
+# Not part of the final project; kept on disk, out of git.
+/archive/
+
+# Build output and runtime data
+/build/
+/logs/
+/data/
+
+# The STM32 project (firmware/) has its own .gitignore for its build output.
 
 # OS / editor junk
 .DS_Store
 Thumbs.db
 *.swp
 
-# The STM32 project has its own .gitignore for build/ etc.
-
 # Office lock files
 ~$*
-/build/
-/logs/
-/data/
