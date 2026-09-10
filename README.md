@@ -1,7 +1,7 @@
 # Submarine Monitoring System
 
 Final project implementation of **SW-FD-LNC-001** ("Submarine Monitoring
-System — Local Node Controller (LNC) End Unit", see [`final project.pdf`](final%20project.pdf)),
+System — Local Node Controller (LNC) End Unit", see [`docs/datasheets/final project.pdf`](docs/datasheets/final%20project.pdf)),
 plus its "OOP Part" (a Submarine Fleet Management System). Three separate
 binaries talk to each other exactly as the spec's system diagram describes:
 
@@ -26,30 +26,31 @@ implementation of that protocol in the whole system — see
 | [`submarine-final-project/`](submarine-final-project/) | STM32 Nucleo-L476RG firmware (FreeRTOS, CMake build) — the LNC end unit. Nine tasks per spec §2 (Monitor, Object Detection, Event, Log, Communication, Configuration, Init, Keep-Alive, Watchdog). |
 | [`central-computer/`](central-computer/) | C++17 console app (spec §3 + the OOP Part's 10-operation fleet menu) with an embedded web dashboard and a read-only TCP server for the Ground Station. |
 | [`ground_station/`](ground_station/) | C++17 TCP client (spec §4) — queries the Central Computer for submarine lists, logs, events, and summary reports, via a console menu and its own read-only web dashboard. |
-| [`docs/`](docs/) | Planning (`PROJECT_PLAN.md`), living status (`SESSION_STATUS.md`), and firmware setup (`CUBEMX_CONFIG.md`, `WIRING_GUIDE.md`, `CUBEMX_CHECKLIST.md`). |
-| [`hardware.md`](hardware.md) | Pin allocation and conflict-resolution history for the sensor shield + SD/RTC logger shield stack. |
-| [`Claude outputs/`](Claude%20outputs/) | `GROUND_STATION_PROTOCOL.md` (the TCP wire protocol spec), plus testing/integration notes. |
-| [`build-and-start.md`](build-and-start.md) | Quick build/run guide for the two PC-side binaries. |
-| `final project.pdf` | The assignment's Software Functional Definition (SW-FD-LNC-001) — the authoritative spec. |
+| [`docs/`](docs/) | Planning (`PROJECT_PLAN.md`), living status (`SESSION_STATUS.md`), firmware setup (`CUBEMX_Setup.md`, `WIRING_GUIDE.md`), and reference docs. |
+| [`docs/hardware.md`](docs/hardware.md) | Pin allocation and conflict-resolution history for the sensor shield + SD/RTC logger shield stack. |
+| [`docs/build-and-start.md`](docs/build-and-start.md) | Quick build/run guide for the two PC-side binaries. |
+| [`docs/datasheets/`](docs/datasheets/) | Vendor datasheets and the project spec (`final project.pdf`). |
+| [`web-ui/`](web-ui/) | (Deprecated) React UI experimentation — not part of the current build. |
 
 ## Quick start
 
 **PC side (Central Computer + Ground Station):** see
-[`build-and-start.md`](build-and-start.md) — configure/build/test/run in
+[`docs/build-and-start.md`](docs/build-and-start.md) — configure/build/test/run in
 one page, plus a troubleshooting table for the common MSVC/CMake issues
 hit on Windows.
 
-**Firmware (STM32):** see [`docs/CUBEMX_CONFIG.md`](docs/CUBEMX_CONFIG.md)
-(CubeMX peripheral setup) and [`docs/WIRING_GUIDE.md`](docs/WIRING_GUIDE.md)
+**Firmware (STM32):** see [`docs/CUBEMX_Setup.md`](docs/CUBEMX_Setup.md)
+(CubeMX peripheral setup, consolidated checklist) and [`docs/WIRING_GUIDE.md`](docs/WIRING_GUIDE.md)
 (shield wiring), then build/flash via STM32CubeIDE or the project's own
-CMake + `CMakePresets.json` in `submarine-final-project/`.
+CMake + `CMakePresets.json` in `submarine-final-project/`. For detailed firmware
+build/flash instructions, see [`submarine-final-project/README.md`](submarine-final-project/README.md).
 
 ## Current status
 
 `docs/SESSION_STATUS.md` is the living checklist of what's done, what's
 pending, and what's still open (remaining hardware tests, submission
 packaging, grading-rubric unknowns, etc.) — check it before assuming
-anything below is fully finished. As of the last update: firmware
+anything below is fully finished. As of the last update (2026-09-09): firmware
 implements all nine spec modules with real TLV comms over UART; the
 Central Computer implements spec §3 plus all 10 OOP-part menu operations,
 a web dashboard, and the Ground Station's TCP server; the Management
