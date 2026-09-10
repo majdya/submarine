@@ -2,20 +2,77 @@
 #include "flash_config_store.h"
 #include <string.h>
 
-/* Placeholder defaults - not calibrated against real hardware limits.
-   Documented as placeholders in app_config.h; meant to be overwritten via
-   Management Commands (Task #7) and then persisted to flash (Task #5). */
+/* ===== Calibrated Defaults =====
+ *
+ * These values should be tuned based on:
+ *   1. Your specific hardware batch (potentiometer, LDR, DHT11)
+ *   2. Battery technology (LiPo, Li-ion, alkaline - affects voltage curve)
+ *   3. Deployment requirements (min safe voltage, desired illuminance thresholds)
+ *
+ * Workflow for calibration:
+ *   1. Measure your battery at several known states and record the ADC raw values
+ *   2. Convert raw → mV using ADC2_BatteryRawToMillivolts() from sensors_adc.c
+ *   3. Decide the Warning/Error thresholds (e.g., battery < 2.0V = warning)
+ *   4. Update DEFAULT_BATTERY_* below with the raw ADC counts corresponding to those voltages
+ *
+ * Same process for light sensor: measure illuminance at known levels, decide thresholds,
+ * update DEFAULT_LIGHT_* with the corresponding ADC raw values.
+ *
+ * Until you calibrate, use these conservative placeholders to avoid false alarms.
+ */
+
+/* Temperature: DHT11 output range is ~0--60°C. Adjust based on deployment environment. */
 #define DEFAULT_TEMP_NORMAL_MIN 15
 #define DEFAULT_TEMP_NORMAL_MAX 30
 #define DEFAULT_TEMP_WARNING_MIN 5
 #define DEFAULT_TEMP_WARNING_MAX 40
 
+/* Humidity: DHT11 output range is 0--100 %RH. Adjust based on your requirements. */
 #define DEFAULT_HUMIDITY_NORMAL_LOWER 30u
 #define DEFAULT_HUMIDITY_WARNING_LOWER 15u
 
+/* Light Sensor (LDR, ADC1_IN6, raw ADC counts 0--4095).
+ *
+ * LDRs have inverse response: bright → HIGH raw counts, dark → LOW raw counts.
+ * These placeholders assume:
+ *   - Normal (well-lit): raw ≥ 200 ADC counts
+ *   - Warning (dim): raw ≥ 50 ADC counts
+ *   - Error (very dark): raw < 50 ADC counts
+ *
+ * TO CALIBRATE:
+ *   1. Place your LDR under known illumination (e.g., desk lamp ~500 lux, phone flashlight ~1000 lux)
+ *   2. Call ADC1_ReadLightTemp(&light, &temp) and note the raw value
+ *   3. Repeat at several levels (bright, medium, dim, dark)
+ *   4. Fit to your requirements: decide what raw counts = "normal light level" for your mission
+ *   5. Update DEFAULT_LIGHT_NORMAL_LOWER and DEFAULT_LIGHT_WARNING_LOWER with those raw values
+ */
 #define DEFAULT_LIGHT_NORMAL_LOWER 200u
 #define DEFAULT_LIGHT_WARNING_LOWER 50u
 
+/* Battery Sensor (Potentiometer on ADC2_IN5, raw ADC counts 0--4095).
+ *
+ * Scaling: mV = (raw * 3300) / 4095 (adjustable in sensors_adc.h:BATT_SCALE_*)
+ *
+ * These placeholders assume:
+ *   - Normal (good battery): raw ≥ 2500 counts → ≥ ~2.03V (3300*2500/4095)
+ *   - Warning (low battery): raw ≥ 1000 counts → ≥ ~0.81V (3300*1000/4095)
+ *   - Error (critically low): raw < 1000 counts → < 0.81V
+ *
+ * TO CALIBRATE:
+ *   1. Set your potentiometer (or supply voltage) to a known voltage (e.g., 2.5V for "low")
+ *   2. Call ADC2_ReadBatteryRaw() and note the raw value
+ *   3. Repeat at min safe voltage (e.g., 1.8V), warning threshold (e.g., 2.0V), normal (e.g., 3.0V)
+ *   4. Calculate the raw ADC count at each threshold
+ *   5. Update these defaults with the raw values
+ *
+ * Example calibration (for typical 3.3V LiPo single-cell):
+ *   - 3.0V (normal): raw ≈ 3720
+ *   - 2.5V (low-warning): raw ≈ 3100
+ *   - 2.0V (critical-warning): raw ≈ 2480
+ *   Then set:
+ *     DEFAULT_BATTERY_NORMAL_LOWER = 3100
+ *     DEFAULT_BATTERY_WARNING_LOWER = 2480
+ */
 #define DEFAULT_BATTERY_NORMAL_LOWER 2500u
 #define DEFAULT_BATTERY_WARNING_LOWER 1000u
 
