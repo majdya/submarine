@@ -1,12 +1,12 @@
 import type { AddSubmarineInput, ApiResult, FleetState, MissionInput, SetLimitsInput } from "@/types/central";
 
-// In dev, vite.config.ts proxies /api/central/* -> http://localhost:8080/api/*.
-// In a static prod build served by a reverse proxy / same-origin setup, point
-// this at whatever path fronts port 8080 - see web-ui/README.md.
 const BASE = "/api/central";
 
-async function postForm(path: string, fields: Record<string, string>): Promise<ApiResult> {
-  const body = new URLSearchParams(fields);
+async function postForm(path: string, fields: any): Promise<ApiResult> {
+  const body = new URLSearchParams();
+  for (const [key, value] of Object.entries(fields)) {
+    body.append(key, String(value));
+  }
   try {
     const res = await fetch(BASE + path, { method: "POST", body });
     return (await res.json()) as ApiResult;
@@ -25,11 +25,11 @@ export function addSubmarine(input: AddSubmarineInput) {
 }
 
 export function assignMission(input: MissionInput) {
-  return postForm(`/submarines/${encodeURIComponent(input.serial)}/mission`, input as unknown as Record<string, string>);
+  return postForm(`/submarines/${encodeURIComponent(input.serial)}/mission`, input);
 }
 
 export function updateMission(input: MissionInput) {
-  return postForm(`/submarines/${encodeURIComponent(input.serial)}/mission/update`, input as unknown as Record<string, string>);
+  return postForm(`/submarines/${encodeURIComponent(input.serial)}/mission/update`, input);
 }
 
 export function endMission(serial: string) {
@@ -45,5 +45,5 @@ export function sendMessage(from: string, to: string, content: string) {
 }
 
 export function setLimits(serial: string, input: SetLimitsInput) {
-  return postForm(`/submarines/${encodeURIComponent(serial)}/limits`, input as unknown as Record<string, string>);
+  return postForm(`/submarines/${encodeURIComponent(serial)}/limits`, input);
 }

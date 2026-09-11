@@ -145,7 +145,7 @@ std::string DashboardApi::addSubmarine(const std::string& type, const std::strin
   }
 
   Submarine* created = nullptr;
-  if (type == "combat") {
+  if (type == "Combat" || type == "combat") {
     created = menu_.addCombatSubmarine(serial, name, std::move(cc));
   } else {
     created = menu_.addResearchSubmarine(serial, name, std::move(cc));

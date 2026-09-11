@@ -30,12 +30,20 @@ export function AddSubmarineDialog() {
     setName("");
     setPort("");
     setStatus(null);
+    // Keep type unchanged - user might want to add multiple of same type
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
-    const result = await addSubmarine({ type, serial, name, port });
+
+    // DEBUG: Log what we're sending
+    const payload = { type, serial, name, port };
+    console.log("📤 Submitting submarine:", payload);
+
+    const result = await addSubmarine(payload);
+    console.log("📥 Response:", result);
+
     setSubmitting(false);
     if (result.ok) {
       setOpen(false);
@@ -66,14 +74,17 @@ export function AddSubmarineDialog() {
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <div className="space-y-1.5">
-            <Label>Type</Label>
+            <Label>Type: <strong>{type}</strong></Label>
             <ToggleGroup
               options={[
                 { value: "Research", label: "Research" },
                 { value: "Combat", label: "Combat" },
               ]}
               value={type}
-              onChange={setType}
+              onChange={(newType) => {
+                console.log("Type changed to:", newType);
+                setType(newType);
+              }}
             />
           </div>
           <div className="space-y-1.5">

@@ -14,8 +14,23 @@ endif()
 # See include/protocol_bridge.h for why these files are consumed directly
 # from the firmware tree rather than copied: it keeps exactly one
 # implementation of the TLV/frame protocol in the whole system.
-set(FIRMWARE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../submarine-final-project"
-    CACHE PATH "Path to submarine-final-project (for the shared protocol sources)")
+set(FIRMWARE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../firmware"
+    CACHE PATH "Path to the LNC firmware tree (for the shared protocol sources)")
+
+# Fail here, with the real reason, rather than letting add_library() below
+# report a generic "Cannot find source file". This path broke once already
+# when submarine-final-project/ was renamed to firmware/, and the error it
+# produced pointed at add_library() instead of at the stale path.
+# Note FIRMWARE_DIR is a CACHE entry: an existing build/ keeps the old value,
+# so a move needs either -DFIRMWARE_DIR=<path> or a wiped build directory.
+if(NOT EXISTS "${FIRMWARE_DIR}/Core/Src/app/tlv.c")
+  message(FATAL_ERROR
+    "FIRMWARE_DIR does not look like the LNC firmware tree:\n"
+    "  ${FIRMWARE_DIR}\n"
+    "Expected Core/Src/app/tlv.c under it. If the firmware folder moved, "
+    "reconfigure with -DFIRMWARE_DIR=<path>, or delete build/ so the cached "
+    "value is discarded.")
+endif()
 
 add_library(protocol STATIC
   ${FIRMWARE_DIR}/Core/Src/app/tlv.c
